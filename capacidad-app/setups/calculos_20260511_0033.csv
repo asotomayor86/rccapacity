@@ -1,0 +1,3 @@
+﻿CALCULO_ID,NOMBRE,DESCRIPCION,UNIDAD,ARBOL_JSON
+cf724484-684a-403f-88b8-a0a758b4c0ed,RS,,,"{""tipo"":""operacion"",""operador"":""/"",""hijos"":[{""tipo"":""campo"",""fuente"":""PRODUCTO_COMPLEJO"",""campo"":""ANCHO_EXTRUSION""},{""tipo"":""campo"",""fuente"":""SETUP_EXTRUSORAS"",""campo"":""HILERA""}]}"
+28275f63-ed8e-4871-b9cf-c9da56f98f29,RENDIMIENTO,,,"{""tipo"":""operacion"",""operador"":""*"",""hijos"":[{""tipo"":""campo"",""fuente"":""PRODUCTO_COMPLEJO"",""campo"":""GALGA""},{""tipo"":""operacion"",""operador"":""*"",""hijos"":[{""tipo"":""campo"",""fuente"":""SETUP_EXTRUSORAS"",""campo"":""HUSILLOS""},{""tipo"":""campo"",""fuente"":""PRODUCTO_COMPLEJO"",""campo"":""ANCHO_EXTRUSION""}]}]}"

@@ -1,0 +1,28 @@
+# Node
+capacidad-app/frontend/node_modules/
+capacidad-app/frontend/.env
+capacidad-app/frontend/.env.local
+
+# Build output
+capacidad-app/dist/
+capacidad-app/frontend/dist/
+
+# Python
+capacidad-app/backend/__pycache__/
+capacidad-app/backend/*.pyc
+__pycache__/
+*.pyc
+*.pyo
+
+# Backend static (rebuilt from frontend build)
+capacidad-app/backend/static/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
