@@ -3,8 +3,7 @@ capacidad-app/frontend/node_modules/
 capacidad-app/frontend/.env
 capacidad-app/frontend/.env.local
 
-# Build output
-capacidad-app/dist/
+# Build output — frontend/dist sí se excluye, capacidad-app/dist (el SPA final) se incluye
 capacidad-app/frontend/dist/
 
 # Python
