@@ -12,6 +12,7 @@
   --text-muted: #64748b;
   --text-accent: #f59e0b;
   --border: #2d3748;
+  --border-dim: rgba(45, 55, 72, 0.5);
   --border-accent: rgba(245, 158, 11, 0.4);
   --success: #10b981;
   --success-dim: rgba(16, 185, 129, 0.12);
@@ -21,6 +22,10 @@
   --warning-dim: rgba(245, 158, 11, 0.12);
   --info: #3b82f6;
   --info-dim: rgba(59, 130, 246, 0.12);
+  --card-success-bg:     #0d1f17;
+  --card-success-border: rgba(16, 185, 129, 0.25);
+  --card-warning-bg:     #1c1500;
+  --card-warning-border: rgba(245, 158, 11, 0.3);
   --font-ui: "DM Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
   --radius-sm: 4px;
@@ -28,6 +33,23 @@
   --radius-lg: 10px;
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   --transition: 150ms ease;
+}
+
+[data-theme="light"] {
+  --bg-primary:   #f8fafc;
+  --bg-surface:   #ffffff;
+  --bg-surface-2: #f1f5f9;
+  --bg-surface-3: #e2e8f0;
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+  --border:     #cbd5e1;
+  --border-dim: rgba(148, 163, 184, 0.5);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --card-success-bg:     #f0fdf9;
+  --card-success-border: rgba(16, 185, 129, 0.4);
+  --card-warning-bg:     #fffbeb;
+  --card-warning-border: rgba(245, 158, 11, 0.45);
 }
 
 *, *::before, *::after {
@@ -352,7 +374,7 @@ body {
 
 .data-table td {
   padding: 7px 12px;
-  border-bottom: 1px solid rgba(45, 55, 72, 0.5);
+  border-bottom: 1px solid var(--border-dim);
   color: var(--text-primary);
   white-space: nowrap;
 }

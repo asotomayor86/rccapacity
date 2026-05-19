@@ -35,6 +35,9 @@
 - `verificaciones.js`: 3 funciones puras, granularidad por REFERENCIA única
 - Estado en Zustand: `verificaciones` + `setVerificacion`
 
+### Sprint 9 (2026-05-19) — v2.6
+- **Modo claro / modo oscuro**: toggle en el lateral (icono sol/luna). Preferencia persistida en localStorage. Tema aplicado con `data-theme` en `<html>`. Variables CSS separadas por tema en `estilos.css`. Tarjetas de estado (verde/ámbar) con variables propias (`--card-success-bg/border`, `--card-warning-bg/border`) para que adapten correctamente ambos temas.
+
 ### Sprint 8 (2026-05-19) — v2.5
 - **IntermediasCalculadas — Ver errores en tarjeta**: eliminados los paneles CollapsibleLog independientes; cada tarjeta tiene ahora 4 botones (Calcular · Visualizar · Exportar CSV · Ver errores). "Ver errores" abre MasterViewer. Tarjeta ENRUTAMIENTOS se vuelve ámbar cuando hay errores de cálculo.
 - **Producto Simple y Doble**: renombrada la tabla intermedia (antes "Producto Complejo"). El cálculo ahora filtra PRODUCTO a solo las referencias con demanda antes de generar variantes Simple/Doble. El filtro se aplica tanto desde IntermediasPage como desde el preview en ReglasProductoComplejoPage.

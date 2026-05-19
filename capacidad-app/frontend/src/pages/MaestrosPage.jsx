@@ -128,7 +128,7 @@ export default function MaestrosPage() {
             const s = status[key] || {};
             const loaded = s.loaded;
             return (
-              <div key={key} className="card" style={{ borderColor: loaded ? "rgba(16,185,129,0.25)" : "var(--border)", background: loaded ? "#0c1a12" : "var(--bg-surface)" }}>
+              <div key={key} className="card" style={{ borderColor: loaded ? "var(--card-success-border)" : "var(--border)", background: loaded ? "var(--card-success-bg)" : "var(--bg-surface)" }}>
                 <div className="card-header">
                   <div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: loaded ? "var(--text-primary)" : "var(--text-muted)", letterSpacing: "0.06em", marginBottom: 2 }}>
@@ -191,7 +191,7 @@ export default function MaestrosPage() {
             const loaded = status.SETUP_EXTRUSORAS?.loaded;
             const s = status.SETUP_EXTRUSORAS || {};
             return (
-              <div className="card" style={{ borderColor: loaded ? "rgba(16,185,129,0.25)" : "var(--border)", background: loaded ? "#0c1a12" : "var(--bg-surface)" }}>
+              <div className="card" style={{ borderColor: loaded ? "var(--card-success-border)" : "var(--border)", background: loaded ? "var(--card-success-bg)" : "var(--bg-surface)" }}>
                 <div className="card-header">
                   <div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: loaded ? "var(--text-primary)" : "var(--text-muted)", letterSpacing: "0.06em", marginBottom: 2 }}>

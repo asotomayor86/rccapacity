@@ -10,7 +10,7 @@ function RuleCard({ title, desc, hasReglas, count, navTo, onExportar, onImportar
   return (
     <div
       className="card"
-      style={{ borderColor: hasReglas ? "rgba(16,185,129,0.25)" : "var(--border)", background: hasReglas ? "#0d1f17" : "var(--bg-surface)" }}
+      style={{ borderColor: hasReglas ? "var(--card-success-border)" : "var(--border)", background: hasReglas ? "var(--card-success-bg)" : "var(--bg-surface)" }}
     >
       <div className="card-header">
         <div>

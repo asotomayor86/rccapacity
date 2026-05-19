@@ -46,8 +46,8 @@ export default function IntermediasPage() {
           <div
             className="card"
             style={{
-              borderColor: calculado ? "rgba(16,185,129,0.25)" : "var(--border)",
-              background:  calculado ? "#0d1f17"               : "var(--bg-surface)",
+              borderColor: calculado ? "var(--card-success-border)" : "var(--border)",
+              background:  calculado ? "var(--card-success-bg)"   : "var(--bg-surface)",
             }}
           >
             <div className="card-header">

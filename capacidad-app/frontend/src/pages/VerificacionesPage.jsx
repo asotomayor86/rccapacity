@@ -32,8 +32,8 @@ function badgeProps(result) {
 
 function cardStyle(result) {
   if (result === null) return { borderColor: "var(--border)", background: "var(--bg-surface)" };
-  if (result.length === 0) return { borderColor: "rgba(16,185,129,0.25)", background: "#0d1f17" };
-  return { borderColor: "rgba(245,158,11,0.3)", background: "#1c1500" };
+  if (result.length === 0) return { borderColor: "var(--card-success-border)", background: "var(--card-success-bg)" };
+  return { borderColor: "var(--card-warning-border)", background: "var(--card-warning-bg)" };
 }
 
 function VerifCard({ title, desc, requiredMasters, result, onCalcular, onVisualizar }) {

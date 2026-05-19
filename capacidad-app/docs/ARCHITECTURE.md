@@ -191,6 +191,13 @@ Nuevo módulo Setup Extrusoras:
 - `exportSetupExtrusoras()` con `_META_FECHA_REVISION` y `_META_FECHA_EXPORTACION`.
 - `SetupExtrusorasPage.jsx`: tabla horizontal, modal de detalle por secciones, acción "Marcar como actual".
 
+### 2026-05-19 — v2.6 Sprint 9
+**Modo claro / modo oscuro**
+- Toggle sol/luna en el pie de la barra lateral (`ThemeToggle` en `App.jsx`). Preferencia persistida en `localStorage` con clave `rcCapacityTheme`.
+- Tema aplicado como `data-theme="light"|"dark"` en `document.documentElement`. El bloque `[data-theme="light"]` en `estilos.css` redefine las variables de color estructurales.
+- Variables nuevas para estados de tarjeta: `--card-success-bg/border` y `--card-warning-bg/border`. Oscuro: `#0d1f17` / `#1c1500`. Claro: `#f0fdf9` / `#fffbeb`. Todos los JSX que antes usaban hexadecimales hardcodeados los referencian ahora via `var()`.
+- `--border-dim` extrae el color hardcodeado de `data-table td` a variable.
+
 ### 2026-05-19 — v2.5 Sprint 8
 Tres mejoras sobre la capa de intermedias y maestros:
 1. **Ver errores en tarjeta** (`IntermediasCalculadasPage`): eliminados los paneles `CollapsibleLog` independientes. Cada tarjeta (ENRUTAMIENTOS y ENRUTAMIENTOS FACTIBLES) añade un 4º botón "Ver errores" que abre `MasterViewer` con esquema propio. La tarjeta ENRUTAMIENTOS adopta borde/fondo ámbar cuando el último cálculo produjo errores.

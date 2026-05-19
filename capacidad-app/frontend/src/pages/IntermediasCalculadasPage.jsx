@@ -122,8 +122,8 @@ export default function IntermediasCalculadasPage() {
         <div
           className="card"
           style={{
-            borderColor: calculated && lastErrors.length > 0 ? "rgba(245,158,11,0.3)"   : hasRows ? "rgba(16,185,129,0.25)" : "var(--border)",
-            background:  calculated && lastErrors.length > 0 ? "#1c1500"                : hasRows ? "#0d1f17"               : "var(--bg-surface)",
+            borderColor: calculated && lastErrors.length > 0 ? "var(--card-warning-border)" : hasRows ? "var(--card-success-border)" : "var(--border)",
+            background:  calculated && lastErrors.length > 0 ? "var(--card-warning-bg)"   : hasRows ? "var(--card-success-bg)"   : "var(--bg-surface)",
           }}
         >
           <div className="card-header">
@@ -193,8 +193,8 @@ export default function IntermediasCalculadasPage() {
         <div
           className="card"
           style={{
-            borderColor: hasRowsFactibles ? "rgba(16,185,129,0.25)" : "var(--border)",
-            background:  hasRowsFactibles ? "#0d1f17" : "var(--bg-surface)",
+            borderColor: hasRowsFactibles ? "var(--card-success-border)" : "var(--border)",
+            background:  hasRowsFactibles ? "var(--card-success-bg)"   : "var(--bg-surface)",
           }}
         >
           <div className="card-header">
