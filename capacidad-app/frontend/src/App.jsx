@@ -177,6 +177,12 @@ function AppInner() {
     <div className={`app-layout ${statusCollapsed ? "status-collapsed" : ""}`}>
       <nav className="nav-sidebar">
         <div className="nav-logo">
+          <img
+            src="./logo.png"
+            alt="Walki Plasbel"
+            className="nav-company-logo"
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
           <div className="nav-logo-text">RCCapacity</div>
           <div className="nav-logo-sub">Planificación de capacidad v2.0</div>
         </div>

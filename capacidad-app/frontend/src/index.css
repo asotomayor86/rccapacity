@@ -1,53 +1,63 @@
+/* ── Walki Plasbel dark theme (default) ──────────── */
 :root {
-  --bg-primary: #0f1117;
-  --bg-surface: #1a1d27;
-  --bg-surface-2: #242736;
-  --bg-surface-3: #2d3148;
-  --accent: #f59e0b;
-  --accent-hover: #d97706;
-  --accent-dim: rgba(245, 158, 11, 0.12);
-  --accent-dim-hover: rgba(245, 158, 11, 0.2);
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-accent: #f59e0b;
-  --border: #2d3748;
-  --border-dim: rgba(45, 55, 72, 0.5);
-  --border-accent: rgba(245, 158, 11, 0.4);
-  --success: #10b981;
+  --bg-primary:   #05101e;
+  --bg-surface:   #091828;
+  --bg-surface-2: #0e2038;
+  --bg-surface-3: #152848;
+  --accent:       #009ee1;
+  --accent-hover: #007ec0;
+  --accent-dim:       rgba(0, 158, 225, 0.12);
+  --accent-dim-hover: rgba(0, 158, 225, 0.22);
+  --text-primary:   #ddeef8;
+  --text-secondary: #7aafc9;
+  --text-muted:     #466a84;
+  --text-accent:    #009ee1;
+  --border:     #153050;
+  --border-dim: rgba(21, 48, 80, 0.8);
+  --border-accent: rgba(0, 158, 225, 0.45);
+  --success:     #10b981;
   --success-dim: rgba(16, 185, 129, 0.12);
-  --error: #ef4444;
+  --error:     #ef4444;
   --error-dim: rgba(239, 68, 68, 0.12);
-  --warning: #f59e0b;
+  --warning:     #f59e0b;
   --warning-dim: rgba(245, 158, 11, 0.12);
-  --info: #3b82f6;
-  --info-dim: rgba(59, 130, 246, 0.12);
-  --card-success-bg:     #0d1f17;
-  --card-success-border: rgba(16, 185, 129, 0.25);
+  --info:     #009ee1;
+  --info-dim: rgba(0, 158, 225, 0.12);
+  --card-success-bg:     #051a12;
+  --card-success-border: rgba(16, 185, 129, 0.28);
   --card-warning-bg:     #1c1500;
-  --card-warning-border: rgba(245, 158, 11, 0.3);
-  --font-ui: "DM Sans", system-ui, sans-serif;
+  --card-warning-border: rgba(245, 158, 11, 0.32);
+  --font-ui:   "DM Sans", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
   --radius-sm: 4px;
-  --radius: 6px;
+  --radius:    6px;
   --radius-lg: 10px;
-  --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow:     0 4px 20px rgba(0, 0, 0, 0.55);
   --transition: 150ms ease;
 }
 
+/* ── Walki Plasbel light theme ───────────────────── */
 [data-theme="light"] {
-  --bg-primary:   #f8fafc;
+  --bg-primary:   #f4f9ff;
   --bg-surface:   #ffffff;
-  --bg-surface-2: #f1f5f9;
-  --bg-surface-3: #e2e8f0;
-  --text-primary:   #0f172a;
-  --text-secondary: #475569;
-  --text-muted:     #94a3b8;
-  --border:     #cbd5e1;
-  --border-dim: rgba(148, 163, 184, 0.5);
-  --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --bg-surface-2: #e6f1ff;
+  --bg-surface-3: #cce0f5;
+  --accent:       #0047a1;
+  --accent-hover: #00377d;
+  --accent-dim:       rgba(0, 71, 161, 0.10);
+  --accent-dim-hover: rgba(0, 71, 161, 0.18);
+  --text-primary:   #00253d;
+  --text-secondary: #4c6480;
+  --text-muted:     #8d9eae;
+  --text-accent:    #0047a1;
+  --border:     #b8d0e8;
+  --border-dim: rgba(184, 208, 232, 0.7);
+  --border-accent: rgba(0, 71, 161, 0.4);
+  --info:     #0047a1;
+  --info-dim: rgba(0, 71, 161, 0.10);
+  --shadow:    0 4px 20px rgba(0, 37, 61, 0.10);
   --card-success-bg:     #f0fdf9;
-  --card-success-border: rgba(16, 185, 129, 0.4);
+  --card-success-border: rgba(16, 185, 129, 0.40);
   --card-warning-bg:     #fffbeb;
   --card-warning-border: rgba(245, 158, 11, 0.45);
 }
@@ -253,7 +263,7 @@ body {
 
 .btn-primary {
   background: var(--accent);
-  color: #000;
+  color: #fff;
   border-color: var(--accent);
 }
 
@@ -507,24 +517,26 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.25);
   color: #fca5a5;
 }
-
 .alert-success {
   background: var(--success-dim);
   border: 1px solid rgba(16, 185, 129, 0.25);
   color: #6ee7b7;
 }
-
 .alert-warning {
   background: var(--warning-dim);
   border: 1px solid rgba(245, 158, 11, 0.25);
   color: #fcd34d;
 }
-
 .alert-info {
   background: var(--info-dim);
-  border: 1px solid rgba(59, 130, 246, 0.25);
+  border: 1px solid rgba(0, 158, 225, 0.25);
   color: #93c5fd;
 }
+
+[data-theme="light"] .alert-error   { color: #b91c1c; }
+[data-theme="light"] .alert-success { color: #047857; }
+[data-theme="light"] .alert-warning { color: #92400e; }
+[data-theme="light"] .alert-info    { color: #1e3a8a; }
 
 /* ── Divider ───────────────────────────────────── */
 
@@ -700,4 +712,21 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+/* ── Company logo in nav ─────────────────────────── */
+.nav-company-logo {
+  display: block;
+  width: 100%;
+  max-width: 148px;
+  height: auto;
+  margin-bottom: 10px;
+  object-fit: contain;
+}
+[data-theme="light"] .nav-company-logo {
+  filter: none;
+}
+[data-theme="dark"] .nav-company-logo,
+:root .nav-company-logo {
+  filter: brightness(0) invert(1);
+}
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
