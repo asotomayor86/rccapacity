@@ -30,7 +30,7 @@
 - **Sección VERIFICACIONES** en nav (entre MAESTROS y REGLAS)
   - V1: Referencias en Demanda no encontradas en Producto (`REFS_SIN_PRODUCTO`)
   - V2: Referencias con demanda sin mezcla asignada en Producto (`REFS_SIN_MEZCLA`)
-  - V3: Referencias cuya mezcla no tiene cobertura en Enrutamiento Mezclas (`REFS_SIN_ENRUTAMIENTO`)
+  - V3: Referencias con demanda sin asignación MO>EX (`REFS_SIN_ENRUTAMIENTO`)
 - Tarjetas idénticas en diseño a Intermedias (badge OK/ALERTAS/SIN DATOS, color ámbar en alerta)
 - `verificaciones.js`: 3 funciones puras, granularidad por REFERENCIA única
 - Estado en Zustand: `verificaciones` + `setVerificacion`

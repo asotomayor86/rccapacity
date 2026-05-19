@@ -108,7 +108,7 @@ function VerifCard({ title, desc, requiredMasters, result, onCalcular, onVisuali
 const VIEWER_CONFIG = {
   V1: { masterName: "REFS EN DEMANDA SIN PRODUCTO",  schema: SCHEMA_REF },
   V2: { masterName: "REFS CON DEMANDA SIN MEZCLA EN PRODUCTO", schema: SCHEMA_REF },
-  V3: { masterName: "REFS SIN ENRUTAMIENTO",          schema: SCHEMA_REF_MEZCLA },
+  V3: { masterName: "REFS CON DEMANDA SIN ASIGNACIÓN MO>EX", schema: SCHEMA_REF_MEZCLA },
 };
 
 export default function VerificacionesPage() {
@@ -196,8 +196,8 @@ export default function VerificacionesPage() {
           />
 
           <VerifCard
-            title="V3 · REFERENCIAS SIN ENRUTAMIENTO"
-            desc="Bobinas en Demanda cuya mezcla (vía Producto) no aparece en Enrutamiento Mezclas"
+            title="V3 · REFERENCIAS CON DEMANDA SIN ASIGNACIÓN MO>EX"
+            desc="Bobinas con demanda cuya mezcla (vía Producto) no aparece en Enrutamiento Mezclas"
             requiredMasters={[
               { name: "DEMANDA",              loaded: demandaLoaded  },
               { name: "PRODUCTO",             loaded: productoLoaded },

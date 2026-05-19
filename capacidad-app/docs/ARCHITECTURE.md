@@ -197,7 +197,7 @@ Nueva sección **VERIFICACIONES** (entre MAESTROS y REGLAS en la nav lateral):
 - `VerificacionesPage.jsx`: 3 tarjetas con diseño idéntico a Intermedias. Badge tri-estado: SIN DATOS / OK (verde) / ALERTAS N (ámbar).
 - V1: `verificarRefsDemandaNoEnProducto` — DEMANDA × PRODUCTO → refs sin ficha. Columnas: REFERENCIA.
 - V2: `verificarRefsSinMezcla` — refs con demanda cuya MEZCLA está vacía en Producto. Columnas: REFERENCIA.
-- V3: `verificarMezclaSinEnrutamiento` — DEMANDA → PRODUCTO → ENRUTAMIENTO_MEZCLAS → refs sin cobertura. Columnas: REFERENCIA, MEZCLA.
+- V3: `verificarMezclaSinEnrutamiento` — DEMANDA → PRODUCTO → ENRUTAMIENTO_MEZCLAS → refs con demanda sin asignación MO>EX. Columnas: REFERENCIA, MEZCLA.
 - Store: campo `verificaciones` con keys `REFS_SIN_PRODUCTO`, `REFS_SIN_MEZCLA`, `REFS_SIN_ENRUTAMIENTO`. `null` = sin calcular, `[]` = OK, `[...]` = alertas.
 
 ### 2026-05-10 — v2.3 Sprint 6
