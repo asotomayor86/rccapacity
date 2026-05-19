@@ -25,6 +25,11 @@ const useStore = create((set, get) => ({
     ENRUTAMIENTOS:          [],
     ENRUTAMIENTOS_FACTIBLES: [],
   },
+  verificaciones: {
+    REFS_SIN_PRODUCTO:     null,
+    REFS_SIN_MEZCLA:       null,
+    REFS_SIN_ENRUTAMIENTO: null,
+  },
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -177,6 +182,10 @@ const useStore = create((set, get) => ({
         ENRUTAMIENTO_A_FACTIBLE: s.reglas.ENRUTAMIENTO_A_FACTIBLE.filter((r) => r.id !== id),
       },
     }));
+  },
+
+  setVerificacion(name, records) {
+    set((s) => ({ verificaciones: { ...s.verificaciones, [name]: records } }));
   },
 
   addCalculo(def) {

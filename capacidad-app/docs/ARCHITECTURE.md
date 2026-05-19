@@ -29,14 +29,17 @@ capacidad-app/
 │   │   ├── masterSchemas.js    # Schemas de todos los maestros
 │   │   ├── index.css           # Design system: variables CSS, componentes base
 │   │   ├── pages/
-│   │   │   ├── MaestrosPage.jsx         # Vista de estado de los 4 maestros
-│   │   │   ├── CargadorPage.jsx         # Flujo 4 pasos: upload→mapeo→validación→import
-│   │   │   ├── ResultadosPage.jsx       # Cálculo, tabla de resultados, exportación
-│   │   │   └── SetupExtrusorasPage.jsx  # Tabla de configuraciones de extrusoras
+│   │   │   ├── MaestrosPage.jsx              # Vista de estado de los 4 maestros
+│   │   │   ├── VerificacionesPage.jsx        # Cruces entre maestros (V1, V2, V3)
+│   │   │   ├── CargadorPage.jsx              # Flujo 4 pasos: upload→mapeo→validación→import
+│   │   │   ├── ResultadosPage.jsx            # Cálculo, tabla de resultados, exportación
+│   │   │   └── SetupExtrusorasPage.jsx       # Tabla de configuraciones de extrusoras
 │   │   ├── services/
 │   │   │   ├── csvParser.js    # Parseo, filtros, mapeo y validación de CSVs
 │   │   │   ├── engine.js       # Motor de cálculo DEMANDA→OCUPACION
 │   │   │   ├── exporter.js     # Exportación CSV/TXT
+│   │   │   ├── intermedias.js  # Cálculo de PRODUCTO_COMPLEJO
+│   │   │   ├── verificaciones.js  # Funciones puras V1/V2/V3 de cruce entre maestros
 │   │   │   └── state.js        # Store Zustand
 │   │   └── components/
 │   │       ├── ColumnMapper.jsx
@@ -48,7 +51,8 @@ capacidad-app/
 │   ├── vite.config.js
 │   └── package.json
 ├── docs/
-│   └── ARCHITECTURE.md  # Este archivo
+│   ├── ARCHITECTURE.md  # Este archivo
+│   └── BACKLOG.md       # Sprints completados y trabajo pendiente
 └── README.md
 ```
 
@@ -137,7 +141,12 @@ Las ediciones de configuraciones de extrusoras se aplican directamente al store 
 | `exporter.js` | `exportToCsv(records)` | Genera y descarga CSV resultado |
 | `exporter.js` | `exportLog(lines)` | Genera y descarga log TXT |
 | `exporter.js` | `exportSetupExtrusoras(records, fechaRevision)` | CSV de extrusoras con metainfo |
+| `intermedias.js` | `calcularProductoComplejo(rows, reglas)` | Genera PRODUCTO_COMPLEJO desde reglas |
+| `verificaciones.js` | `verificarRefsDemandaNoEnProducto(d, p)` | V1: refs en Demanda sin ficha en Producto |
+| `verificaciones.js` | `verificarRefsSinMezcla(d, p)` | V2: refs con demanda cuya MEZCLA está vacía en Producto |
+| `verificaciones.js` | `verificarMezclaSinEnrutamiento(d, p, e)` | V3: refs cuya mezcla no está en Enrutamiento |
 | `state.js` | `importMaster(name, records)` | Actualiza maestro en Zustand store |
+| `state.js` | `setVerificacion(name, records)` | Guarda resultado de una verificación (null = sin calcular) |
 | `state.js` | `updateSetupExtrusora(nombre, index, campos)` | Edición parcial de una configuración |
 | `state.js` | `getMasterStatus()` | Estado derivado de los maestros |
 | `state.js` | `setSavedFilter / deleteSavedFilter` | CRUD presets de filtros en store |
@@ -181,6 +190,15 @@ Nuevo módulo Setup Extrusoras:
 - Store: campo `setupExtrusorasRevision` + invariante ES_ACTUAL (scope global, corregida en Sprint 6).
 - `exportSetupExtrusoras()` con `_META_FECHA_REVISION` y `_META_FECHA_EXPORTACION`.
 - `SetupExtrusorasPage.jsx`: tabla horizontal, modal de detalle por secciones, acción "Marcar como actual".
+
+### 2026-05-19 — v2.4 Sprint 7
+Nueva sección **VERIFICACIONES** (entre MAESTROS y REGLAS en la nav lateral):
+- `verificaciones.js`: 3 funciones puras de cruce entre maestros. Granularidad por REFERENCIA única.
+- `VerificacionesPage.jsx`: 3 tarjetas con diseño idéntico a Intermedias. Badge tri-estado: SIN DATOS / OK (verde) / ALERTAS N (ámbar).
+- V1: `verificarRefsDemandaNoEnProducto` — DEMANDA × PRODUCTO → refs sin ficha. Columnas: REFERENCIA.
+- V2: `verificarRefsSinMezcla` — refs con demanda cuya MEZCLA está vacía en Producto. Columnas: REFERENCIA.
+- V3: `verificarMezclaSinEnrutamiento` — DEMANDA → PRODUCTO → ENRUTAMIENTO_MEZCLAS → refs sin cobertura. Columnas: REFERENCIA, MEZCLA.
+- Store: campo `verificaciones` con keys `REFS_SIN_PRODUCTO`, `REFS_SIN_MEZCLA`, `REFS_SIN_ENRUTAMIENTO`. `null` = sin calcular, `[]` = OK, `[...]` = alertas.
 
 ### 2026-05-10 — v2.3 Sprint 6
 Dos correcciones sobre el módulo Setup Extrusoras:
