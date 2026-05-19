@@ -6,27 +6,18 @@ import MasterViewer from "../components/MasterViewer";
 import { useToast } from "../components/Toast";
 import { schemaDeDefiniciones } from "../utils/enrutamientosSchema";
 
-// ── Collapsible log panel ─────────────────────────────────────────────────────
+const SCHEMA_ERRORES = [
+  { name: "tipo",        type: "string", label: "TIPO"        },
+  { name: "referencia",  type: "string", label: "REFERENCIA"  },
+  { name: "descripcion", type: "string", label: "DESCRIPCIÓN" },
+];
 
-function CollapsibleLog({ title, color, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="card">
-      <div
-        className="card-header"
-        style={{ cursor: "pointer", userSelect: "none" }}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="card-title" style={{ color }}>
-          {open ? "▼" : "▶"} {title}
-        </span>
-      </div>
-      {open && children}
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
+const SCHEMA_NO_FACTIBLES = [
+  { name: "REFERENCIA_COMPLEJA", type: "string", label: "REFERENCIA COMPLEJA" },
+  { name: "MEZCLA",              type: "string", label: "MEZCLA"              },
+  { name: "EXTRUSORA",           type: "string", label: "EXTRUSORA"           },
+  { name: "MOTIVOS",             type: "string", label: "MOTIVOS"             },
+];
 
 export default function IntermediasCalculadasPage() {
   const toast = useToast();
@@ -43,11 +34,13 @@ export default function IntermediasCalculadasPage() {
   const setupExtrusoras  = useStore((s) => s.masters.SETUP_EXTRUSORAS?.records  ?? []);
   const definiciones     = useStore((s) => s.calculos.DEFINICIONES);
 
-  const [lastErrors,       setLastErrors]       = useState([]);
-  const [calculated,       setCalculated]       = useState(false);
-  const [viewing,          setViewing]          = useState(false);
-  const [calculatedFact,   setCalculatedFact]   = useState(false);
-  const [viewingFactibles, setViewingFactibles] = useState(false);
+  const [lastErrors,         setLastErrors]         = useState([]);
+  const [calculated,         setCalculated]         = useState(false);
+  const [viewing,            setViewing]            = useState(false);
+  const [viewingErrors,      setViewingErrors]      = useState(false);
+  const [calculatedFact,     setCalculatedFact]     = useState(false);
+  const [viewingFactibles,   setViewingFactibles]   = useState(false);
+  const [viewingNoFactibles, setViewingNoFactibles] = useState(false);
 
   const hasRS          = definiciones.some((d) => d.nombre === "RS");
   const hasRENDIMIENTO = definiciones.some((d) => d.nombre === "RENDIMIENTO");
@@ -110,6 +103,12 @@ export default function IntermediasCalculadasPage() {
   }
 
   const noFactibles = rowsFactibles.filter((r) => r.FACTIBLE === "NO");
+  const noFactiblesParaViewer = noFactibles.map((r) => ({
+    REFERENCIA_COMPLEJA: r.REFERENCIA_COMPLEJA,
+    MEZCLA:              r.MEZCLA,
+    EXTRUSORA:           r.EXTRUSORA,
+    MOTIVOS:             (r._motivos ?? []).join("; "),
+  }));
 
   return (
     <>
@@ -123,8 +122,8 @@ export default function IntermediasCalculadasPage() {
         <div
           className="card"
           style={{
-            borderColor: hasRows ? "rgba(16,185,129,0.25)" : "var(--border)",
-            background:  hasRows ? "#0d1f17" : "var(--bg-surface)",
+            borderColor: calculated && lastErrors.length > 0 ? "rgba(245,158,11,0.3)"   : hasRows ? "rgba(16,185,129,0.25)" : "var(--border)",
+            background:  calculated && lastErrors.length > 0 ? "#1c1500"                : hasRows ? "#0d1f17"               : "var(--bg-surface)",
           }}
         >
           <div className="card-header">
@@ -136,8 +135,15 @@ export default function IntermediasCalculadasPage() {
                 Cruce PRODUCTO_COMPLEJO → MEZCLA → EXTRUSORA × SETUP_EXTRUSORAS
               </div>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: hasRows ? "var(--success-dim)" : "var(--bg-surface-2)", color: hasRows ? "var(--success)" : "var(--text-muted)", border: `1px solid ${hasRows ? "rgba(16,185,129,0.3)" : "var(--border)"}` }}>
-              {hasRows ? `${rows.length.toLocaleString("es-ES")} filas` : "SIN DATOS"}
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
+              background: calculated && lastErrors.length > 0 ? "rgba(245,158,11,0.12)" : hasRows ? "var(--success-dim)"  : "var(--bg-surface-2)",
+              color:      calculated && lastErrors.length > 0 ? "var(--warning)"        : hasRows ? "var(--success)"      : "var(--text-muted)",
+              border:     `1px solid ${calculated && lastErrors.length > 0 ? "rgba(245,158,11,0.4)" : hasRows ? "rgba(16,185,129,0.3)" : "var(--border)"}`,
+            }}>
+              {calculated && lastErrors.length > 0
+                ? `ERRORES (${lastErrors.length})`
+                : hasRows ? `${rows.length.toLocaleString("es-ES")} filas` : "SIN DATOS"}
             </span>
           </div>
 
@@ -172,37 +178,16 @@ export default function IntermediasCalculadasPage() {
             >
               Exportar CSV
             </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              disabled={!calculated || lastErrors.length === 0}
+              onClick={() => setViewingErrors(true)}
+              title={lastErrors.length > 0 ? `Ver ${lastErrors.length} errores` : "Sin errores"}
+            >
+              Ver errores
+            </button>
           </div>
         </div>
-
-        {/* ── Log de errores ENRUTAMIENTOS (collapsible) ── */}
-        {calculated && lastErrors.length > 0 && (
-          <CollapsibleLog
-            title={`Log de errores (${lastErrors.length})`}
-            color="var(--error)"
-          >
-            <div style={{ overflowX: "auto" }}>
-              <table className="data-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Tipo</th>
-                    <th>Referencia</th>
-                    <th>Descripción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lastErrors.map((err, i) => (
-                    <tr key={i}>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--warning)", whiteSpace: "nowrap" }}>{err.tipo}</td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{err.referencia}</td>
-                      <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{err.descripcion}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CollapsibleLog>
-        )}
 
         {/* ── Card ENRUTAMIENTOS FACTIBLES ── */}
         <div
@@ -257,39 +242,16 @@ export default function IntermediasCalculadasPage() {
             >
               Exportar CSV
             </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              disabled={!calculatedFact || noFactibles.length === 0}
+              onClick={() => setViewingNoFactibles(true)}
+              title={noFactibles.length > 0 ? `Ver ${noFactibles.length} filas excluidas` : "Sin filas excluidas"}
+            >
+              Ver errores
+            </button>
           </div>
         </div>
-
-        {/* ── Log filas NO FACTIBLES (collapsible) ── */}
-        {calculatedFact && noFactibles.length > 0 && (
-          <CollapsibleLog
-            title={`Log: ${noFactibles.length} filas excluidas`}
-            color="var(--warning)"
-          >
-            <div style={{ overflowX: "auto" }}>
-              <table className="data-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Referencia Compleja</th>
-                    <th>Mezcla</th>
-                    <th>Extrusora</th>
-                    <th>Motivos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {noFactibles.map((row, i) => (
-                    <tr key={i}>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{row.REFERENCIA_COMPLEJA}</td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{row.MEZCLA}</td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{row.EXTRUSORA}</td>
-                      <td style={{ fontSize: 11, color: "var(--text-muted)" }}>{(row._motivos ?? []).join("; ")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CollapsibleLog>
-        )}
       </div>
 
       {/* ── MasterViewer ENRUTAMIENTOS ── */}
@@ -312,6 +274,26 @@ export default function IntermediasCalculadasPage() {
           onExport={() => exportEnrutamientos(rowsFactibles, extraColumnsFactibles)}
           onClose={() => setViewingFactibles(false)}
           collapsibleGroup={{ field: "FACTIBLE", value: "NO", label: "filas no factibles" }}
+        />
+      )}
+
+      {/* ── MasterViewer errores ENRUTAMIENTOS ── */}
+      {viewingErrors && (
+        <MasterViewer
+          masterName="ERRORES · ENRUTAMIENTOS"
+          records={lastErrors}
+          schema={SCHEMA_ERRORES}
+          onClose={() => setViewingErrors(false)}
+        />
+      )}
+
+      {/* ── MasterViewer filas NO FACTIBLES ── */}
+      {viewingNoFactibles && (
+        <MasterViewer
+          masterName="EXCLUIDAS · ENRUTAMIENTOS FACTIBLES"
+          records={noFactiblesParaViewer}
+          schema={SCHEMA_NO_FACTIBLES}
+          onClose={() => setViewingNoFactibles(false)}
         />
       )}
     </>
