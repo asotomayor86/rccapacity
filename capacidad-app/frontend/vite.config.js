@@ -3,13 +3,22 @@ import react from "@vitejs/plugin-react";
 import { viteSingleFile } from "vite-plugin-singlefile";
 
 export default defineConfig({
-  plugins: [react(), viteSingleFile()],
+  plugins: [
+    react(),
+    viteSingleFile({ inlinePattern: ["**/*.js"] }),
+  ],
   base: "./",
   build: {
     outDir: "../dist",
     emptyOutDir: true,
-    // singlefile requires all assets inlined
-    assetsInlineLimit: Infinity,
+    assetsInlineLimit: 0,
+    cssCodeSplit: false,
+    rollupOptions: {
+      output: {
+        assetFileNames: (info) =>
+          info.name?.endsWith(".css") ? "estilos.css" : "assets/[name]-[hash][extname]",
+      },
+    },
   },
   server: {
     port: 5173,
