@@ -165,13 +165,13 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
     const mezcla = productoMap.get(ref) ?? "";
 
     if (!mezcla) {
-      errors.push({ tipo: "MEZCLA_NO_RESUELTA", referencia: pc.REFERENCIA, descripcion: "No encontrada en PRODUCTO o sin MEZCLA" });
+      errors.push({ tipo: "MEZCLA_NO_RESUELTA", referencia: pc.REFERENCIA, mezcla: "", extrusora: "", descripcion: "No encontrada en PRODUCTO o sin MEZCLA" });
       continue;
     }
 
     const emRows = emMap.get(mezcla) ?? [];
     if (emRows.length === 0) {
-      errors.push({ tipo: "SIN_EXTRUSORAS_EM", referencia: pc.REFERENCIA, descripcion: `MEZCLA ${mezcla} sin entradas en ENRUTAMIENTO_MEZCLAS` });
+      errors.push({ tipo: "SIN_EXTRUSORAS_EM", referencia: pc.REFERENCIA, mezcla, extrusora: "", descripcion: `MEZCLA ${mezcla} sin entradas en ENRUTAMIENTO_MEZCLAS` });
       continue;
     }
 
@@ -180,7 +180,7 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
       const seRows    = seMap.get(extrusora) ?? [];
 
       if (seRows.length === 0) {
-        errors.push({ tipo: "SIN_SETUP", referencia: pc.REFERENCIA, descripcion: `EXTRUSORA ${em.EXTRUSORA ?? extrusora} no encontrada en SETUP_EXTRUSORAS` });
+        errors.push({ tipo: "SIN_SETUP", referencia: pc.REFERENCIA, mezcla, extrusora: em.EXTRUSORA ?? extrusora, descripcion: `EXTRUSORA ${em.EXTRUSORA ?? extrusora} no encontrada en SETUP_EXTRUSORAS` });
         continue;
       }
 
@@ -189,7 +189,6 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
           REFERENCIA_COMPLEJA:     pc.REFERENCIA_COMPLEJA     ?? null,
           MEZCLA:                  mezcla,
           EXTRUSORA:               em.EXTRUSORA               ?? null,
-          // Campos booleanos fijos de PRODUCTO_COMPLEJO (siempre presentes)
           SOLDADOR_LONGITUDINAL:   pc.SOLDADOR_LONGITUDINAL   ?? null,
           ABIERTA_LATERAL:         pc.ABIERTA_LATERAL         ?? null,
           ABIERTA_CENTRO:          pc.ABIERTA_CENTRO          ?? null,
@@ -204,10 +203,30 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
         const rs          = defRS          ? evaluarArbol(defRS.arbol,          row) : null;
         const rendimiento = defRENDIMIENTO ? evaluarArbol(defRENDIMIENTO.arbol, row) : null;
 
-        if (rs === null)          errors.push({ tipo: "RS_NULA",           referencia: row.REFERENCIA_COMPLEJA, descripcion: "El árbol RS retornó null (campo faltante o división por cero)" });
-        if (rendimiento === null) errors.push({ tipo: "RENDIMIENTO_NULO",  referencia: row.REFERENCIA_COMPLEJA, descripcion: "El árbol RENDIMIENTO retornó null" });
+        // Campos de fórmula que entran en RS/RENDIMIENTO — se incluyen en el error
+        // para que el viewer los muestre dinámicamente según la fórmula activa
+        const formulaFields = Object.fromEntries(
+          [...camposPC, ...camposSE].map((c) => [c, row[c] ?? null])
+        );
 
-        row.RS_CALCULADA          = rs;
+        if (rs === null) {
+          errors.push({
+            tipo: "RS_NULA", referencia: row.REFERENCIA_COMPLEJA,
+            mezcla: row.MEZCLA, extrusora: row.EXTRUSORA,
+            descripcion: "Árbol RS devolvió null (campo faltante o división por cero)",
+            ...formulaFields,
+          });
+        }
+        if (rendimiento === null) {
+          errors.push({
+            tipo: "RENDIMIENTO_NULO", referencia: row.REFERENCIA_COMPLEJA,
+            mezcla: row.MEZCLA, extrusora: row.EXTRUSORA,
+            descripcion: "Árbol RENDIMIENTO devolvió null",
+            ...formulaFields,
+          });
+        }
+
+        row.RS_CALCULADA          = rs !== null ? Math.round(rs * 100) / 100 : null;
         row.RENDIMIENTO_CALCULADO = rendimiento;
         rows.push(row);
       }

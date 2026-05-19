@@ -5,12 +5,40 @@ import { exportEnrutamientos } from "../services/exporter";
 import MasterViewer from "../components/MasterViewer";
 import { useToast } from "../components/Toast";
 import { schemaDeDefiniciones } from "../utils/enrutamientosSchema";
+import { MASTER_SCHEMAS_META } from "../masterSchemas";
 
-const SCHEMA_ERRORES = [
+// Columnas fijas que siempre aparecen en el viewer de errores
+const ERRORES_FIXED = [
   { name: "tipo",        type: "string", label: "TIPO"        },
   { name: "referencia",  type: "string", label: "REFERENCIA"  },
+  { name: "mezcla",      type: "string", label: "MEZCLA"      },
+  { name: "extrusora",   type: "string", label: "EXTRUSORA"   },
   { name: "descripcion", type: "string", label: "DESCRIPCIÓN" },
 ];
+const ERRORES_FIXED_NAMES = new Set(ERRORES_FIXED.map((c) => c.name));
+
+// Resuelve el tipo de un campo de fórmula desde los schemas de maestros
+const ALL_SCHEMA_FIELDS = [
+  ...(MASTER_SCHEMAS_META.PRODUCTO_COMPLEJO  ?? []),
+  ...(MASTER_SCHEMAS_META.SETUP_EXTRUSORAS   ?? []),
+];
+function resolveFieldType(name) {
+  return ALL_SCHEMA_FIELDS.find((f) => f.name === name)?.type ?? "decimal";
+}
+
+// Construye el schema dinámico a partir de los registros de error reales.
+// Las columnas extra (campos de fórmula) se derivan de las claves de los registros.
+function buildErrorSchema(errors) {
+  const extraNames = [...new Set(
+    errors.flatMap((e) => Object.keys(e)).filter((k) => !ERRORES_FIXED_NAMES.has(k))
+  )];
+  const extraCols = extraNames.map((name) => ({
+    name,
+    type:  resolveFieldType(name),
+    label: name,
+  }));
+  return [...ERRORES_FIXED, ...extraCols];
+}
 
 const SCHEMA_NO_FACTIBLES = [
   { name: "REFERENCIA_COMPLEJA", type: "string", label: "REFERENCIA COMPLEJA" },
@@ -41,6 +69,8 @@ export default function IntermediasCalculadasPage() {
   const [calculatedFact,     setCalculatedFact]     = useState(false);
   const [viewingFactibles,   setViewingFactibles]   = useState(false);
   const [viewingNoFactibles, setViewingNoFactibles] = useState(false);
+
+  const schemaErrores = useMemo(() => buildErrorSchema(lastErrors), [lastErrors]);
 
   const hasRS          = definiciones.some((d) => d.nombre === "RS");
   const hasRENDIMIENTO = definiciones.some((d) => d.nombre === "RENDIMIENTO");
@@ -282,7 +312,7 @@ export default function IntermediasCalculadasPage() {
         <MasterViewer
           masterName="ERRORES · ENRUTAMIENTOS"
           records={lastErrors}
-          schema={SCHEMA_ERRORES}
+          schema={schemaErrores}
           onClose={() => setViewingErrors(false)}
         />
       )}
