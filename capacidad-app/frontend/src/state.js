@@ -8,6 +8,11 @@ const useStore = create((set, get) => ({
   masters: Object.fromEntries(MASTER_NAMES.map((n) => [n, emptyMaster()])),
   uploads: {},
   results: { records: [], log: [], calculated_at: null },
+  escenario0: {
+    cmSummary: [], refDetail: [], maxOcupacion: null,
+    totalHorasDisponibles: null, totalHorasCargadas: null,
+    warnings: [], calculated_at: null,
+  },
   savedFilters: {},
   setupExtrusorasRevision: null,
   exportDirName: null,
@@ -99,6 +104,10 @@ const useStore = create((set, get) => ({
 
   setResults(records, log) {
     set({ results: { records, log: log ?? [], calculated_at: new Date().toISOString() } });
+  },
+
+  setEscenario0(data) {
+    set({ escenario0: { ...data, calculated_at: new Date().toISOString() } });
   },
 
   setSavedFilter(name, filters) {
