@@ -37,12 +37,13 @@ capacidad-app/
 │   │   │   ├── ResultadosPage.jsx            # Cálculo, tabla de resultados, exportación
 │   │   │   └── SetupExtrusorasPage.jsx       # Tabla de configuraciones de extrusoras
 │   │   ├── services/
-│   │   │   ├── csvParser.js       # Parseo, filtros, mapeo y validación de CSVs
-│   │   │   ├── engine.js          # Motor de cálculo; calcularEnrutamientos con RS a 2dp
-│   │   │   ├── exporter.js        # Exportación CSV/TXT
-│   │   │   ├── intermedias.js     # calcularProductoComplejo (filtra por Demanda)
+│   │   │   ├── csvParser.js    # Parseo, filtros, mapeo y validación de CSVs
+│   │   │   ├── engine.js       # calcularEnrutamientos (RS 2dp, errores dinámicos)
+│   │   │   ├── escenario0.js   # LP water-filling anual (Escenario 0)
+│   │   │   ├── exporter.js     # Exportación CSV/TXT
+│   │   │   ├── intermedias.js  # calcularProductoComplejo (filtra por Demanda)
 │   │   │   ├── verificaciones.js  # Funciones puras V1/V2/V3 de cruce entre maestros
-│   │   │   └── state.js           # Store Zustand
+│   │   │   └── state.js        # Store Zustand
 │   │   └── components/
 │   │       ├── MasterViewer.jsx   # Modal paginado con filtros, schema dinámico
 │   │       ├── ColumnMapper.jsx
@@ -160,6 +161,7 @@ Las ediciones de configuraciones de extrusoras se aplican directamente al store 
 | `exporter.js` | `exportLog(lines)` | Genera y descarga log TXT |
 | `exporter.js` | `exportSetupExtrusoras(records, fechaRevision)` | CSV de extrusoras con metainfo |
 | `intermedias.js` | `calcularProductoComplejo(rows, reglas)` | Genera PRODUCTO_COMPLEJO desde reglas |
+| `escenario0.js` | `calcularEscenario0({...})` | LP water-filling anual: asigna demanda a (variante,CM) minimizando ocupación pico |
 | `verificaciones.js` | `verificarRefsDemandaNoEnProducto(d, p)` | V1: refs en Demanda sin ficha en Producto |
 | `verificaciones.js` | `verificarRefsSinMezcla(d, p)` | V2: refs con demanda cuya MEZCLA está vacía en Producto |
 | `verificaciones.js` | `verificarMezclaSinEnrutamiento(d, p, e)` | V3: refs cuya mezcla no está en Enrutamiento |
@@ -209,6 +211,40 @@ Nuevo módulo Setup Extrusoras:
 - Store: campo `setupExtrusorasRevision` + invariante ES_ACTUAL (scope global, corregida en Sprint 6).
 - `exportSetupExtrusoras()` con `_META_FECHA_REVISION` y `_META_FECHA_EXPORTACION`.
 - `SetupExtrusorasPage.jsx`: tabla horizontal, modal de detalle por secciones, acción "Marcar como actual".
+
+### 2026-05-19 — v2.9 Sprint 12
+**Escenario 0 — Rough Cut Capacity Anual**
+
+Nuevo módulo de optimización de capacidad en `ResultadosPage`. Reemplaza el antiguo botón "Ejecutar cálculo".
+
+**Modelo (LP continuo):**
+- Variable `f[R,v,c]` ≥ 0: fracción de la demanda anual de la referencia base R asignada a variante v ∈ {S,D} en CM c.
+- Restricción de demanda: `Σ_{v,c} f[R,v,c] = 1` (toda la demanda cubierta sin doble conteo).
+- Restricción de rutas: `f[R,v,c] = 0` si (R+v, c) no es factible.
+- Carga en CM c: `LOAD[c] = Σ_{R,v} f[R,v,c] × Q[R] / REND[R,v,c]` (en horas).
+- Capacidad anual: `CAP[c] = Σ_meses HORAS_EFICIENTES[c,mes]`.
+- Objetivo bifásico: min `max_c LOAD[c]/CAP[c]`, después min `Σ_c LOAD[c]/CAP[c]`.
+
+**Algoritmo (water-filling entrópico con blending):**
+1. Inicialización proporcional al rendimiento de cada ruta.
+2. 300 iteraciones de annealing entrópico: `score[r] = exp(−u[cm_r] / T) × rend[r]`, temperatura T decrece de 1.0 a 0.
+3. Actualización mezclada: `f_nuevo = (1−LR)·f_viejo + LR·f_target` con LR=0.15 (previene oscilaciones).
+4. Guarda la mejor asignación encontrada (min max utilización).
+5. Cede al UI (`setTimeout(0)`) cada 15 iteraciones para actualizar la barra de progreso.
+
+**Entradas:**
+- `ENRUTAMIENTOS_FACTIBLES` (FACTIBLE=SI, ES_ACTUAL=true)
+- `DEMANDA` anualizada por referencia
+- `CALENDARIO` anualizado por CM
+
+**Salidas:**
+- `cmSummary`: resumen por CM con HORAS_DISPONIBLES, HORAS_CARGADAS, OCUPACION
+- `refDetail`: detalle por (ref, variante, CM) con KG asignados, % asignado, horas requeridas, ocupación CM
+
+**Archivos nuevos/modificados:**
+- `services/escenario0.js`: algoritmo puro (async, sin dependencias de store)
+- `state.js`: campo `escenario0` + acción `setEscenario0`
+- `pages/ResultadosPage.jsx`: rediseño completo con barra de progreso, KPIs, tablas por pestaña
 
 ### 2026-05-19 — v2.8 Sprint 11
 **RS a 2 decimales + errores dinámicos en ENRUTAMIENTOS**

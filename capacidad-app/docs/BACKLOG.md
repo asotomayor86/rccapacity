@@ -57,6 +57,18 @@
   - Para `RS_NULA` y `RENDIMIENTO_NULO`: además de las fijas, una columna por cada campo que entra en la fórmula activa (se leen de los árboles `camposPC` + `camposSE` en tiempo de ejecución). Si la fórmula cambia y se recalcula, las columnas cambian solas sin redespliegue.
   - Schema derivado dinámicamente con `buildErrorSchema(errors)` + `useMemo` en la página. Tipos resueltos vía `MASTER_SCHEMAS_META`.
 
+### Sprint 12 (2026-05-19) — v2.9
+- **Escenario 0 — Rough Cut Capacity Anual** en ResultadosPage (sustituye al antiguo "Ejecutar cálculo"):
+  - **Modelo LP continuo**: para cada referencia base R con demanda anual Q[R] kg, la variable `f[R,v,c]` (fracción asignada a variante v en CM c) es continua ≥ 0. Una referencia puede repartirse entre múltiples CMs y entre variante Simple y Doble, siempre que la suma total sea el 100 % de su demanda (sin doble conteo de producción). Objetivo bifásico: minimizar primero la ocupación pico de cualquier CM, luego la suma total de ocupaciones.
+  - **Algoritmo**: water-filling entrópico con blending (LR=0.15). 300 iteraciones, temperatura decrece de 1.0 a 0 (annealing). Guarda la mejor solución encontrada. Cede control al UI cada 15 iteraciones.
+  - **Entradas**: ENRUTAMIENTOS_FACTIBLES (FACTIBLE=SI, ES_ACTUAL=true), DEMANDA anualizada (suma de kg por referencia), CALENDARIO anualizado (suma de HORAS_EFICIENTES por CM).
+  - **Barra de progreso** animada con mensaje de iteración y % de ocupación pico en tiempo real.
+  - **3 KPIs** tras el cálculo: ocupación pico (color), horas disponibles totales, horas cargadas totales.
+  - **Pestaña "Resumen por CM"**: tabla ordenable con HORAS DISPONIBLES / HORAS CARGADAS / OCUPACIÓN.
+  - **Pestaña "Detalle por referencia"**: tabla ordenable + búsqueda + paginación (100 filas) con columnas REFERENCIA / VARIANTE (badge Simple/Doble) / CM / KG DEMANDA / KG ASIGNADOS / % ASIGNADO / RENDIMIENTO / HORAS REQUERIDAS / OCUPACIÓN CM.
+  - Estado en Zustand: `escenario0` + acción `setEscenario0`.
+  - Servicio independiente: `escenario0.js`.
+
 ---
 
 ## Pendiente
