@@ -66,7 +66,7 @@ export default function IntermediasCalculadasPage() {
 
   const missingDataLabel = [
     !hasPrereqs                   && "Cálculos RS/RENDIMIENTO",
-    productoComplejo.length === 0 && "Producto Complejo",
+    productoComplejo.length === 0 && "Producto Simple y Doble",
     enrutaMezclas.length === 0    && "Enrutamiento Mezclas",
   ].filter(Boolean).join(", ");
 
@@ -132,7 +132,7 @@ export default function IntermediasCalculadasPage() {
                 ENRUTAMIENTOS
               </div>
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                Cruce PRODUCTO_COMPLEJO → MEZCLA → EXTRUSORA × SETUP_EXTRUSORAS
+                Cruce PRODUCTO SIMPLE Y DOBLE → MEZCLA → EXTRUSORA × SETUP_EXTRUSORAS
               </div>
             </div>
             <span style={{

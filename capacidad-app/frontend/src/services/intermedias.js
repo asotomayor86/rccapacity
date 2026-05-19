@@ -105,10 +105,18 @@ function evaluarCampo(campo, reglas, productoRow, tipoPc) {
   return undefined; // no rule matched → use hardcoded fallback
 }
 
-export function calcularProductoComplejo(productoRows, reglas = []) {
+export function calcularProductoComplejo(productoRows, reglas = [], demandaRows = []) {
+  const refsConDemanda = demandaRows.length > 0
+    ? new Set(demandaRows.map((r) => String(r.REFERENCIA ?? "").trim()).filter(Boolean))
+    : null;
+
+  const filtroProd = refsConDemanda
+    ? productoRows.filter((p) => refsConDemanda.has(String(p.REFERENCIA ?? "").trim()))
+    : productoRows;
+
   const result = [];
 
-  for (const p of productoRows) {
+  for (const p of filtroProd) {
     const ref   = p.REFERENCIA ?? "";
     const ancho = p.ANCHO ?? null;
     const galga = p.GALGA ?? null;

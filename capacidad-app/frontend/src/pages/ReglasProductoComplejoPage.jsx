@@ -309,6 +309,7 @@ export default function ReglasProductoComplejoPage() {
   const deleteRegla = useStore((s) => s.deleteRegla);
 
   const productoRows  = useStore((s) => s.masters.PRODUCTO?.records ?? []);
+  const demandaRows   = useStore((s) => s.masters.DEMANDA?.records  ?? []);
   const setIntermedia = useStore((s) => s.setIntermedia);
 
   const [expanded, setExpanded] = useState(null);
@@ -321,9 +322,10 @@ export default function ReglasProductoComplejoPage() {
       toast.error("Carga primero el maestro PRODUCTO.");
       return;
     }
-    const result = calcularProductoComplejo(productoRows, reglas);
+    const result = calcularProductoComplejo(productoRows, reglas, demandaRows);
     setIntermedia("PRODUCTO_COMPLEJO", result);
-    toast.success(`Producto Complejo calculado: ${result.length} registros.`);
+    const filtrado = demandaRows.length > 0 ? " (filtrado por Demanda)" : "";
+    toast.success(`Producto Simple y Doble calculado: ${result.length} registros${filtrado}.`);
   }
 
   // ── Rule CRUD ─────────────────────────────────────────────────────────────
