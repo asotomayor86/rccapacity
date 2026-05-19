@@ -25,31 +25,42 @@
 capacidad-app/
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx             # Layout + HashRouter + ToastProvider
+│   │   ├── App.jsx             # Layout + HashRouter + ToastProvider + ThemeToggle
 │   │   ├── masterSchemas.js    # Schemas de todos los maestros
-│   │   ├── index.css           # Design system: variables CSS, componentes base
+│   │   ├── index.css           # Design system: variables CSS, componentes base, temas
 │   │   ├── pages/
-│   │   │   ├── MaestrosPage.jsx              # Vista de estado de los 4 maestros
+│   │   │   ├── MaestrosPage.jsx              # Vista de estado de los 4 maestros + tooltip distinct
 │   │   │   ├── VerificacionesPage.jsx        # Cruces entre maestros (V1, V2, V3)
+│   │   │   ├── IntermediasPage.jsx           # Producto Simple y Doble (filtrado por Demanda)
+│   │   │   ├── IntermediasCalculadasPage.jsx # Enrutamientos + Factibles + Ver errores dinámico
 │   │   │   ├── CargadorPage.jsx              # Flujo 4 pasos: upload→mapeo→validación→import
 │   │   │   ├── ResultadosPage.jsx            # Cálculo, tabla de resultados, exportación
 │   │   │   └── SetupExtrusorasPage.jsx       # Tabla de configuraciones de extrusoras
 │   │   ├── services/
-│   │   │   ├── csvParser.js    # Parseo, filtros, mapeo y validación de CSVs
-│   │   │   ├── engine.js       # Motor de cálculo DEMANDA→OCUPACION
-│   │   │   ├── exporter.js     # Exportación CSV/TXT
-│   │   │   ├── intermedias.js  # Cálculo de PRODUCTO_COMPLEJO
+│   │   │   ├── csvParser.js       # Parseo, filtros, mapeo y validación de CSVs
+│   │   │   ├── engine.js          # Motor de cálculo; calcularEnrutamientos con RS a 2dp
+│   │   │   ├── exporter.js        # Exportación CSV/TXT
+│   │   │   ├── intermedias.js     # calcularProductoComplejo (filtra por Demanda)
 │   │   │   ├── verificaciones.js  # Funciones puras V1/V2/V3 de cruce entre maestros
-│   │   │   └── state.js        # Store Zustand
+│   │   │   └── state.js           # Store Zustand
 │   │   └── components/
+│   │       ├── MasterViewer.jsx   # Modal paginado con filtros, schema dinámico
 │   │       ├── ColumnMapper.jsx
 │   │       ├── FilterBuilder.jsx
 │   │       ├── DataPreview.jsx
 │   │       ├── ValidationReport.jsx
 │   │       ├── StatusBar.jsx
 │   │       └── Toast.jsx
-│   ├── vite.config.js
+│   ├── public/
+│   │   ├── logo.png          # Logo corporativo Walki Plasbel (copiado a dist/ en build)
+│   │   └── estilos_old.css   # Tema anterior ámbar/industrial (backup)
+│   ├── vite.config.js        # singlefile solo JS; CSS separado; stripCrossorigin plugin
 │   └── package.json
+├── dist/                     # Build de producción (3 ficheros para distribuir)
+│   ├── index.html            # App completa con JS embebido
+│   ├── estilos.css           # Design system Walki Plasbel (editable sin rebuild)
+│   ├── estilos_old.css       # Tema anterior (backup)
+│   └── logo.png              # Logo corporativo
 ├── docs/
 │   ├── ARCHITECTURE.md  # Este archivo
 │   └── BACKLOG.md       # Sprints completados y trabajo pendiente
@@ -116,8 +127,14 @@ El engine produce una fila por cada combinación (MES × REFERENCIA × CM). Perm
 ### SPA con HashRouter
 Build estático en `dist/` abierto directamente en el navegador sin servidor. HashRouter garantiza compatibilidad con el protocolo `file://`.
 
-### Paleta oscura industrial
-Fondo `#0f1117`, superficies `#1a1d27`, acento ámbar `#f59e0b`. Tipografía: DM Sans (UI) + JetBrains Mono (datos). Sin librerías de componentes externas.
+### Identidad visual Walki Plasbel
+Paleta corporativa alineada con walki.com y plasbel.com. **Oscuro** (default): navy `#05101e` / `#091828`, acento azul brillante `#009ee1`. **Claro**: fondo `#f4f9ff`, acento `#0047a1`, texto `#00253d`. Tipografía: DM Sans (UI) + JetBrains Mono (datos). Sin librerías de componentes externas. El tema anterior (ámbar/industrial) se conserva en `estilos_old.css`.
+
+### Distribución en dos/tres ficheros
+El build genera `dist/index.html` (JS embebido, ~352 KB) + `dist/estilos.css` (CSS separado, ~11 KB) + `dist/logo.png`. Los tres ficheros deben estar en la misma carpeta. El `<link rel="stylesheet" href="./estilos.css">` usa ruta relativa para compatibilidad con `file://`. El atributo `crossorigin` se elimina automáticamente mediante el plugin `stripCrossorigin` en `vite.config.js`.
+
+### Modo claro / oscuro con CSS custom properties
+El tema se controla con `data-theme="light"|"dark"` en `document.documentElement`. El bloque `[data-theme="light"]` en `estilos.css` redefine las variables estructurales. Los JSX no tienen colores hardcodeados: usan `var(--card-success-bg)`, `var(--card-warning-bg)`, etc. La preferencia se persiste en `localStorage` (clave: `rcCapacityTheme`).
 
 ### Metainfo en columnas `_META_*`
 Los CSV con metainformación transportan campos en columnas prefijadas `_META_`. El validador los extrae antes de procesar campos de negocio. Al exportar se reinyectan junto con `_META_FECHA_EXPORTACION` (timestamp ISO 8601 del momento de exportación).
@@ -138,6 +155,7 @@ Las ediciones de configuraciones de extrusoras se aplican directamente al store 
 | `csvParser.js` | `applyFilters(raw, filters)` | Filtra filas raw por operadores |
 | `csvParser.js` | `applyMappingAndValidate(...)` | Mapea + valida tipos → informe |
 | `engine.js` | `calculate({...})` | Motor de cálculo → store.setResults |
+| `engine.js` | `calcularEnrutamientos({...})` | Cruza Producto Simple/Doble × Mezcla × Extrusora × Setup. RS redondeada a 2dp. Errores incluyen mezcla, extrusora y campos de fórmula. |
 | `exporter.js` | `exportToCsv(records)` | Genera y descarga CSV resultado |
 | `exporter.js` | `exportLog(lines)` | Genera y descarga log TXT |
 | `exporter.js` | `exportSetupExtrusoras(records, fechaRevision)` | CSV de extrusoras con metainfo |
@@ -161,7 +179,8 @@ cd frontend && npm install && npm run dev
 
 # Build
 cd frontend && npm run build
-# → dist/index.html (abrir directamente en el navegador)
+# → dist/index.html + dist/estilos.css + dist/logo.png
+# Los tres ficheros deben estar juntos al abrir en el navegador
 ```
 
 ---
@@ -191,12 +210,25 @@ Nuevo módulo Setup Extrusoras:
 - `exportSetupExtrusoras()` con `_META_FECHA_REVISION` y `_META_FECHA_EXPORTACION`.
 - `SetupExtrusorasPage.jsx`: tabla horizontal, modal de detalle por secciones, acción "Marcar como actual".
 
+### 2026-05-19 — v2.8 Sprint 11
+**RS a 2 decimales + errores dinámicos en ENRUTAMIENTOS**
+- `engine.js`: `RS_CALCULADA = Math.round(rs * 100) / 100`. Todos los registros de error enriquecidos con campos `mezcla` y `extrusora`. Para `RS_NULA` y `RENDIMIENTO_NULO`, los valores de los campos de fórmula (`camposPC` ∪ `camposSE`) se spread directamente en el objeto de error.
+- `IntermediasCalculadasPage`: `SCHEMA_ERRORES` estático reemplazado por `buildErrorSchema(errors)` que deriva columnas dinámicamente de las claves reales de los registros. Columnas fijas: `TIPO · REFERENCIA · MEZCLA · EXTRUSORA · DESCRIPCIÓN`. Columnas extra: una por campo de fórmula activo, con tipo resuelto vía `MASTER_SCHEMAS_META`. Recompuesto con `useMemo` al cambiar `lastErrors`. **Sin redespliegue** al cambiar las fórmulas de cálculo.
+
+### 2026-05-19 — v2.7 Sprint 10
+**Identidad visual Walki Plasbel + logo corporativo**
+- Paleta rediseñada en `index.css` con colores de walki.com / plasbel.com. Oscuro: navy `#05101e`, acento `#009ee1`. Claro: `#f4f9ff` bg, `#0047a1` acento, `#00253d` texto. `btn-primary color: #000 → #fff`. Override de colores de alerta para modo claro.
+- Logo corporativo: `<img src="./logo.png" className="nav-company-logo">` en cabecera nav. Guardado en `frontend/public/` (Vite lo copia a `dist/` en cada build). Filtro `brightness(0) invert(1)` en modo oscuro; colores originales en modo claro. `onError` lo oculta si el fichero no existe.
+- `estilos_old.css` conservado en `frontend/public/` → disponible en `dist/` en cada build.
+- Bug fix: atributo `crossorigin` en `<link rel="stylesheet">` rompe la carga CSS con `file://`. Plugin `stripCrossorigin` en `vite.config.js` lo elimina en post-build.
+- Bug fix: labels del toggle de tema invertidos. Ahora muestra el modo activo (luna = oscuro, sol = claro).
+
 ### 2026-05-19 — v2.6 Sprint 9
-**Modo claro / modo oscuro**
+**CSS separado + modo claro / modo oscuro**
+- CSS extraído del HTML embebido a `dist/estilos.css` mediante `vite-plugin-singlefile { inlinePattern: ["**/*.js"] }`. Carpeta `frontend/public/` para assets estáticos copiados al `dist/`. Plugin `stripCrossorigin` elimina atributo problemático del `<link>`.
 - Toggle sol/luna en el pie de la barra lateral (`ThemeToggle` en `App.jsx`). Preferencia persistida en `localStorage` con clave `rcCapacityTheme`.
-- Tema aplicado como `data-theme="light"|"dark"` en `document.documentElement`. El bloque `[data-theme="light"]` en `estilos.css` redefine las variables de color estructurales.
-- Variables nuevas para estados de tarjeta: `--card-success-bg/border` y `--card-warning-bg/border`. Oscuro: `#0d1f17` / `#1c1500`. Claro: `#f0fdf9` / `#fffbeb`. Todos los JSX que antes usaban hexadecimales hardcodeados los referencian ahora via `var()`.
-- `--border-dim` extrae el color hardcodeado de `data-table td` a variable.
+- Tema aplicado como `data-theme="light"|"dark"` en `document.documentElement`. Bloque `[data-theme="light"]` en `estilos.css` redefine variables de color.
+- Variables nuevas: `--card-success-bg/border`, `--card-warning-bg/border`, `--border-dim`. Todos los hexadecimales hardcodeados en JSX reemplazados por `var()`.
 
 ### 2026-05-19 — v2.5 Sprint 8
 Tres mejoras sobre la capa de intermedias y maestros:
