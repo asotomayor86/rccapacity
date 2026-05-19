@@ -721,12 +721,9 @@ body {
   height: auto;
   margin-bottom: 10px;
   object-fit: contain;
+  filter: brightness(0) invert(1); /* visible on dark navy bg */
 }
 [data-theme="light"] .nav-company-logo {
-  filter: none;
-}
-[data-theme="dark"] .nav-company-logo,
-:root .nav-company-logo {
-  filter: brightness(0) invert(1);
+  filter: none; /* show original colors on light bg */
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
