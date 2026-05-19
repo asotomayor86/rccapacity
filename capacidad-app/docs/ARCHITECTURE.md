@@ -191,6 +191,12 @@ Nuevo módulo Setup Extrusoras:
 - `exportSetupExtrusoras()` con `_META_FECHA_REVISION` y `_META_FECHA_EXPORTACION`.
 - `SetupExtrusorasPage.jsx`: tabla horizontal, modal de detalle por secciones, acción "Marcar como actual".
 
+### 2026-05-19 — v2.5 Sprint 8
+Tres mejoras sobre la capa de intermedias y maestros:
+1. **Ver errores en tarjeta** (`IntermediasCalculadasPage`): eliminados los paneles `CollapsibleLog` independientes. Cada tarjeta (ENRUTAMIENTOS y ENRUTAMIENTOS FACTIBLES) añade un 4º botón "Ver errores" que abre `MasterViewer` con esquema propio. La tarjeta ENRUTAMIENTOS adopta borde/fondo ámbar cuando el último cálculo produjo errores.
+2. **Producto Simple y Doble** (`intermedias.js`, `IntermediasPage`, `ReglasProductoComplejoPage`): renombrada la tabla intermedia (UI). La función `calcularProductoComplejo` acepta `demandaRows` opcional y filtra PRODUCTO a las referencias con demanda antes de expandir variantes Simple/Doble. Claves internas (`PRODUCTO_COMPLEJO`, `fuente` en reglas) sin cambiar.
+3. **Tooltip de valores distintos** (`MaestrosPage`): hover sobre los pills de campo de un maestro cargado muestra un tooltip `position: fixed` con el recuento de valores distintos (non-null) de ese campo. Resolución label→name vía `MASTER_SCHEMAS_META` para campos con etiqueta distinta al nombre interno (e.g. `"ANCHO (MM)"` → `"ANCHO"`).
+
 ### 2026-05-19 — v2.4 Sprint 7
 Nueva sección **VERIFICACIONES** (entre MAESTROS y REGLAS en la nav lateral):
 - `verificaciones.js`: 3 funciones puras de cruce entre maestros. Granularidad por REFERENCIA única.

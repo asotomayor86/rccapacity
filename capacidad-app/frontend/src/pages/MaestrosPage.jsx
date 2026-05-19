@@ -4,6 +4,7 @@ import useStore from "../state";
 import MasterViewer from "../components/MasterViewer";
 import { autoImport } from "../services/csvParser";
 import { useToast } from "../components/Toast";
+import { MASTER_SCHEMAS_META } from "../masterSchemas";
 
 const MASTER_INFO = {
   DEMANDA: {
@@ -50,9 +51,33 @@ export default function MaestrosPage() {
   const setupRevision = useStore((s) => s.setupExtrusorasRevision);
 
   const [viewing, setViewing] = useState(null);
+  const [tooltip, setTooltip] = useState(null); // { label, count, x, y }
 
   // Only the 4 core masters need to be loaded for calculation
   const allCoreLoaded = CORE_MASTERS.every((k) => status[k]?.loaded);
+
+  // ── Distinct-count tooltip ────────────────────────────────────────────────
+  function resolveFieldName(masterKey, fieldLabel) {
+    const schema = MASTER_SCHEMAS_META[masterKey] ?? [];
+    return (
+      schema.find((f) => (f.label ?? f.name) === fieldLabel)?.name ??
+      schema.find((f) => f.name === fieldLabel)?.name ??
+      fieldLabel
+    );
+  }
+
+  function handlePillEnter(e, masterKey, fieldLabel) {
+    const records = masters[masterKey]?.records ?? [];
+    if (records.length === 0) return;
+    const fieldName = resolveFieldName(masterKey, fieldLabel);
+    const count = new Set(
+      records.map((r) => r[fieldName]).filter((v) => v != null && v !== "")
+    ).size;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({ label: fieldLabel, count, x: rect.left, y: rect.bottom + 6 });
+  }
+
+  function handlePillLeave() { setTooltip(null); }
 
   // ── Auto-import handler ───────────────────────────────────────────────────
   function triggerAutoImport(masterName) {
@@ -118,7 +143,12 @@ export default function MaestrosPage() {
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 14 }}>
                   {info.fields.map((f) => (
-                    <span key={f} style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+                    <span
+                      key={f}
+                      style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: loaded ? "default" : undefined }}
+                      onMouseEnter={loaded ? (e) => handlePillEnter(e, key, f) : undefined}
+                      onMouseLeave={loaded ? handlePillLeave : undefined}
+                    >
                       {f}
                     </span>
                   ))}
@@ -216,6 +246,30 @@ export default function MaestrosPage() {
       </div>
 
       {viewing && <MasterViewer masterName={viewing} onClose={() => setViewing(null)} />}
+
+      {tooltip && (
+        <div style={{
+          position: "fixed",
+          left: tooltip.x,
+          top: tooltip.y,
+          zIndex: 9999,
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          padding: "5px 12px",
+          fontSize: 11,
+          fontFamily: "var(--font-mono)",
+          color: "var(--text-muted)",
+          pointerEvents: "none",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.45)",
+          whiteSpace: "nowrap",
+        }}>
+          <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: 14 }}>
+            {tooltip.count.toLocaleString("es-ES")}
+          </span>
+          {" "}valores distintos
+        </div>
+      )}
     </>
   );
 }
