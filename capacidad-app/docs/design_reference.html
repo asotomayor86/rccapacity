@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCCapacity — Guía de Elementos de Diseño</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    background: #f4f9ff;
+    color: #00253d;
+    padding: 40px;
+  }
+
+  /* ── Layout ── */
+  .page { max-width: 960px; margin: 0 auto; }
+  .section { margin-bottom: 48px; }
+  .section-title {
+    font-size: 18px; font-weight: 700; color: #0047a1;
+    border-bottom: 2px solid #0047a1; padding-bottom: 8px; margin-bottom: 24px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .subsection-title {
+    font-size: 13px; font-weight: 700; color: #4c6480;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 20px 0 12px; border-left: 3px solid #009ee1; padding-left: 10px;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+  /* ── Typography ── */
+  code {
+    font-family: "Consolas", "Fira Code", monospace;
+    font-size: 11px;
+    background: #e6f1ff;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #0047a1;
+  }
+  .label {
+    font-size: 10px; font-weight: 600; color: #8d9eae;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-top: 6px; display: block;
+  }
+  .desc { font-size: 12px; color: #4c6480; margin-top: 4px; }
+
+  /* ── Color swatches ── */
+  .swatch-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .swatch {
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 90px;
+  }
+  .swatch-box {
+    width: 80px; height: 48px;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.12);
+    margin-bottom: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: rgba(255,255,255,0.7); font-family: monospace;
+  }
+  .swatch-name { font-size: 10px; font-weight: 600; color: #00253d; text-align: center; }
+  .swatch-hex  { font-size: 10px; color: #8d9eae; font-family: monospace; text-align: center; }
+  .swatch-var  { font-size: 9px; color: #0047a1; font-family: monospace; text-align: center; }
+
+  /* ── Dark theme preview ── */
+  .dark-preview {
+    background: #05101e;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    border: 1px solid #153050;
+  }
+
+  /* ── Component demos ── */
+  .demo-box {
+    background: #ffffff;
+    border: 1px solid #b8d0e8;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .demo-box.dark {
+    background: #091828;
+    border-color: #153050;
+  }
+
+  /* ── Buttons (light preview) ── */
+  .btn-demo { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: default; border: 1px solid transparent; margin: 4px; }
+  .btn-primary-d   { background: #009ee1; color: #fff; border-color: #009ee1; }
+  .btn-secondary-d { background: #0e2038; color: #ddeef8; border-color: #153050; }
+  .btn-ghost-d     { background: transparent; color: #7aafc9; border-color: transparent; }
+  .btn-danger-d    { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+  .btn-primary-l   { background: #0047a1; color: #fff; border-color: #0047a1; }
+  .btn-secondary-l { background: #e6f1ff; color: #00253d; border-color: #b8d0e8; }
+  .btn-ghost-l     { background: transparent; color: #4c6480; border-color: transparent; }
+  .btn-danger-l    { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-lg { padding: 10px 20px; font-size: 14px; }
+
+  /* ── Cards ── */
+  .card-demo {
+    border: 1px solid; border-radius: 10px; padding: 20px; margin-bottom: 12px;
+  }
+  .card-normal-d { background: #091828; border-color: #153050; }
+  .card-ok-d     { background: #051a12; border-color: rgba(16,185,129,0.28); }
+  .card-warn-d   { background: #1c1500; border-color: rgba(245,158,11,0.32); }
+  .card-normal-l { background: #ffffff; border-color: #b8d0e8; }
+  .card-ok-l     { background: #f0fdf9; border-color: rgba(16,185,129,0.40); }
+  .card-warn-l   { background: #fffbeb; border-color: rgba(245,158,11,0.45); }
+
+  /* ── Badges ── */
+  .badge-demo { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; margin: 3px; font-family: monospace; border: 1px solid; }
+  .badge-sin  { background: rgba(14,32,56,0.5); color: #466a84; border-color: #153050; }
+  .badge-ok   { background: rgba(16,185,129,0.12); color: #10b981; border-color: rgba(16,185,129,0.3); }
+  .badge-warn { background: rgba(245,158,11,0.12); color: #f59e0b; border-color: rgba(245,158,11,0.4); }
+  .badge-err  { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+  .badge-sin-l  { background: #f1f5f9; color: #8d9eae; border-color: #b8d0e8; }
+  .badge-ok-l   { background: rgba(16,185,129,0.10); color: #047857; border-color: rgba(16,185,129,0.35); }
+  .badge-warn-l { background: rgba(245,158,11,0.10); color: #92400e; border-color: rgba(245,158,11,0.4); }
+  .badge-err-l  { background: rgba(239,68,68,0.10); color: #b91c1c; border-color: rgba(239,68,68,0.3); }
+
+  /* ── Nav demo ── */
+  .nav-demo { background: #091828; width: 220px; border-radius: 10px; padding: 0; overflow: hidden; border: 1px solid #153050; }
+  .nav-logo-demo { padding: 16px 20px 12px; border-bottom: 1px solid #153050; }
+  .nav-logo-text-demo { font-family: monospace; font-size: 13px; font-weight: 600; color: #009ee1; letter-spacing: 0.1em; text-transform: uppercase; }
+  .nav-logo-sub-demo { font-size: 11px; color: #466a84; margin-top: 2px; }
+  .nav-section-demo { padding: 10px 12px 4px; font-size: 10px; font-weight: 600; color: #466a84; text-transform: uppercase; letter-spacing: 0.1em; }
+  .nav-link-demo { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 6px; color: #7aafc9; font-size: 13px; font-weight: 500; margin: 1px 8px; }
+  .nav-link-active { background: rgba(0,158,225,0.12); color: #009ee1; }
+
+  /* ── Table demo ── */
+  .table-demo { width: 100%; border-collapse: collapse; font-size: 12px; font-family: monospace; }
+  .table-demo th { background: #0e2038; color: #466a84; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; padding: 8px 12px; text-align: left; border-bottom: 1px solid #153050; }
+  .table-demo td { padding: 7px 12px; border-bottom: 1px solid rgba(21,48,80,0.5); color: #ddeef8; }
+  .table-demo tr:hover td { background: #0e2038; }
+
+  /* ── Form demo ── */
+  .input-demo { background: #05101e; border: 1px solid #153050; border-radius: 6px; color: #ddeef8; font-size: 13px; padding: 8px 10px; width: 100%; font-family: "Segoe UI", sans-serif; outline: none; margin-bottom: 8px; }
+  .label-demo { font-size: 11px; font-weight: 600; color: #466a84; text-transform: uppercase; letter-spacing: 0.07em; display: block; margin-bottom: 4px; }
+
+  /* ── Alerts demo ── */
+  .alert-demo { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 8px; border: 1px solid; }
+  .alert-s { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); color: #6ee7b7; }
+  .alert-e { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
+  .alert-w { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.25); color: #fcd34d; }
+  .alert-i { background: rgba(0,158,225,0.12); border-color: rgba(0,158,225,0.25); color: #93c5fd; }
+
+  /* ── Toast demo ── */
+  .toast-demo { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; background: #091828; border-left: 3px solid; min-width: 280px; margin-bottom: 6px; }
+  .toast-dot-demo { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Steps demo ── */
+  .steps-demo { display: flex; align-items: center; }
+  .step-demo { display: flex; align-items: center; gap: 8px; }
+  .step-bubble-demo { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; font-family: monospace; border: 2px solid; flex-shrink: 0; }
+  .step-label-demo { font-size: 12px; font-weight: 500; }
+  .step-connector-demo { flex: 1; min-width: 32px; height: 1px; background: #153050; margin: 0 8px; }
+  .step-done   .step-bubble-demo { border-color: #10b981; background: rgba(16,185,129,0.12); color: #10b981; }
+  .step-done   .step-label-demo  { color: #10b981; }
+  .step-active .step-bubble-demo { border-color: #009ee1; background: rgba(0,158,225,0.12); color: #009ee1; }
+  .step-active .step-label-demo  { color: #ddeef8; }
+  .step-future .step-bubble-demo { border-color: #153050; background: #0e2038; color: #466a84; }
+  .step-future .step-label-demo  { color: #466a84; }
+
+  /* ── Progress bar demo ── */
+  .progress-track { background: #0e2038; border-radius: 4px; height: 6px; overflow: hidden; margin: 8px 0; }
+  .progress-fill  { height: 100%; background: #009ee1; border-radius: 4px; }
+
+  /* ── Typography scale ── */
+  .typo-row { display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid #e6f1ff; }
+  .typo-spec { font-size: 10px; color: #8d9eae; font-family: monospace; min-width: 160px; }
+
+  /* ── Layout diagram ── */
+  .layout-diagram { background: #05101e; border-radius: 10px; padding: 16px; display: flex; gap: 8px; min-height: 280px; border: 1px solid #153050; }
+  .layout-sidebar { background: #091828; border: 1px solid #153050; border-radius: 8px; width: 120px; flex-shrink: 0; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .layout-main    { background: #091828; border: 1px solid #153050; border-radius: 8px; flex: 1; padding: 10px; }
+  .layout-status  { background: #091828; border: 1px solid #153050; border-radius: 8px; width: 80px; flex-shrink: 0; padding: 10px; }
+  .diagram-label  { font-size: 9px; color: #466a84; text-align: center; font-family: monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+  .diagram-block  { background: #0e2038; border-radius: 4px; height: 20px; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #466a84; font-family: monospace; }
+  .diagram-block.accent { background: rgba(0,158,225,0.15); color: #009ee1; }
+  .diagram-page-header { background: #0e2038; border-radius: 4px; padding: 8px; margin-bottom: 8px; }
+  .diagram-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .diagram-card  { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); border-radius: 4px; height: 50px; }
+
+  /* ── Occupation colors ── */
+  .ocup-demo { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .ocup-bar { height: 16px; border-radius: 4px; }
+
+  /* ── Print ── */
+  @media print {
+    body { background: white; padding: 20px; font-size: 12px; }
+    .page { max-width: 100%; }
+    .section { page-break-inside: avoid; margin-bottom: 32px; }
+    .no-print { display: none; }
+    .dark-preview { border: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Portada ── -->
+  <div style="text-align:center;padding:40px 0 48px;border-bottom:3px solid #0047a1;margin-bottom:48px">
+    <div style="font-size:11px;font-weight:700;color:#009ee1;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Walki Plasbel</div>
+    <h1 style="font-size:32px;font-weight:700;color:#00253d;margin-bottom:8px">RCCapacity</h1>
+    <div style="font-size:16px;color:#4c6480;margin-bottom:4px">Guía de Elementos de Diseño</div>
+    <div style="font-size:12px;color:#8d9eae">Design System Reference — v2.9</div>
+  </div>
+
+  <!-- ── 1. Layout general ── -->
+  <div class="section">
+    <div class="section-title">1. Layout General de la Aplicación</div>
+    <p class="desc" style="margin-bottom:16px">La app usa un grid de 3 columnas fijas. El contenido principal crece en la columna central.</p>
+
+    <div class="layout-diagram">
+      <div class="layout-sidebar">
+        <div class="diagram-label">Nav Sidebar<br>220 px</div>
+        <div class="diagram-block accent">Logo</div>
+        <div class="diagram-block accent">RCCapacity</div>
+        <div class="diagram-block" style="height:6px;margin:4px 0"></div>
+        <div class="diagram-block">MAESTROS</div>
+        <div class="diagram-block">VERIFICACIONES</div>
+        <div class="diagram-block">REGLAS</div>
+        <div class="diagram-block">INTERMEDIAS</div>
+        <div class="diagram-block">CÁLCULOS</div>
+        <div class="diagram-block">RESULTADOS</div>
+        <div style="flex:1"></div>
+        <div class="diagram-block" style="color:#009ee1">☀ Modo claro</div>
+        <div class="diagram-block">📁 Carpeta</div>
+      </div>
+      <div class="layout-main">
+        <div class="diagram-label" style="text-align:left;margin-bottom:8px">Main Content — flex:1</div>
+        <div class="diagram-page-header">
+          <div style="font-size:9px;color:#ddeef8;font-weight:700;font-family:monospace">.page-header</div>
+          <div style="font-size:8px;color:#466a84;font-family:monospace">h1.page-title + p.page-subtitle</div>
+        </div>
+        <div style="font-size:9px;color:#466a84;font-family:monospace;margin-bottom:6px">.page-body { padding: 24px 32px }</div>
+        <div class="diagram-cards">
+          <div class="diagram-card"></div>
+          <div class="diagram-card"></div>
+          <div class="diagram-card"></div>
+          <div class="diagram-card"></div>
+        </div>
+        <div style="font-size:8px;color:#466a84;font-family:monospace;margin-top:6px">.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px }</div>
+      </div>
+      <div class="layout-status">
+        <div class="diagram-label">StatusBar<br>280 px</div>
+        <div style="font-size:8px;color:#466a84;margin-top:8px;font-family:monospace">Panel de<br>estado en<br>tiempo real</div>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:16px">
+      <div class="demo-box">
+        <div style="font-weight:700;color:#0047a1;font-size:12px;margin-bottom:8px">.nav-sidebar</div>
+        <div class="desc">Barra lateral izquierda. Contiene logo, enlaces de navegación, toggle de tema y carpeta de exportación. Fondo <code>--bg-surface</code>.</div>
+      </div>
+      <div class="demo-box">
+        <div style="font-weight:700;color:#0047a1;font-size:12px;margin-bottom:8px">.main-content</div>
+        <div class="desc">Área central con scroll vertical. Estructura interna: <code>.page-header</code> (fijo en top) + <code>.page-body</code> (contenido).</div>
+      </div>
+      <div class="demo-box">
+        <div style="font-weight:700;color:#0047a1;font-size:12px;margin-bottom:8px">StatusBar</div>
+        <div class="desc">Panel derecho colapsable (280 px / 36 px). Muestra estado de maestros cargados en tiempo real.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 2. Paleta de colores ── -->
+  <div class="section">
+    <div class="section-title">2. Paleta de Colores</div>
+
+    <div class="subsection-title">Tema Oscuro (default) — Walki Navy</div>
+    <div class="swatch-row">
+      <div class="swatch"><div class="swatch-box" style="background:#05101e;color:rgba(255,255,255,0.5)">#05101e</div><div class="swatch-name">Fondo página</div><div class="swatch-var">--bg-primary</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#091828">#091828</div><div class="swatch-name">Superficie</div><div class="swatch-var">--bg-surface</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#0e2038">#0e2038</div><div class="swatch-name">Superficie 2</div><div class="swatch-var">--bg-surface-2</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#152848">#152848</div><div class="swatch-name">Superficie 3</div><div class="swatch-var">--bg-surface-3</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#009ee1">#009ee1</div><div class="swatch-name">Acento</div><div class="swatch-var">--accent</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#007ec0">#007ec0</div><div class="swatch-name">Acento hover</div><div class="swatch-var">--accent-hover</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#ddeef8;color:#05101e">#ddeef8</div><div class="swatch-name">Texto primario</div><div class="swatch-var">--text-primary</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#7aafc9;color:#05101e">#7aafc9</div><div class="swatch-name">Texto secundario</div><div class="swatch-var">--text-secondary</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#466a84">#466a84</div><div class="swatch-name">Texto muted</div><div class="swatch-var">--text-muted</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#153050">#153050</div><div class="swatch-name">Borde</div><div class="swatch-var">--border</div></div>
+    </div>
+
+    <div class="subsection-title">Tema Claro — Walki Corporate</div>
+    <div class="swatch-row">
+      <div class="swatch"><div class="swatch-box" style="background:#f4f9ff;color:#8d9eae;border-color:#b8d0e8">#f4f9ff</div><div class="swatch-name">Fondo página</div><div class="swatch-var">--bg-primary</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#ffffff;color:#8d9eae;border-color:#b8d0e8">#ffffff</div><div class="swatch-name">Superficie</div><div class="swatch-var">--bg-surface</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#e6f1ff;color:#4c6480">#e6f1ff</div><div class="swatch-name">Superficie 2</div><div class="swatch-var">--bg-surface-2</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#0047a1">#0047a1</div><div class="swatch-name">Acento</div><div class="swatch-var">--accent</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#00253d">#00253d</div><div class="swatch-name">Texto primario</div><div class="swatch-var">--text-primary</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#4c6480">#4c6480</div><div class="swatch-name">Texto secundario</div><div class="swatch-var">--text-secondary</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#8d9eae;color:#fff">#8d9eae</div><div class="swatch-name">Texto muted</div><div class="swatch-var">--text-muted</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#b8d0e8;color:#00253d">#b8d0e8</div><div class="swatch-name">Borde</div><div class="swatch-var">--border</div></div>
+    </div>
+
+    <div class="subsection-title">Colores Semánticos (iguales en ambos temas)</div>
+    <div class="swatch-row">
+      <div class="swatch"><div class="swatch-box" style="background:#10b981">#10b981</div><div class="swatch-name">Success</div><div class="swatch-var">--success</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#ef4444">#ef4444</div><div class="swatch-name">Error</div><div class="swatch-var">--error</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#f59e0b">#f59e0b</div><div class="swatch-name">Warning</div><div class="swatch-var">--warning</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#009ee1">#009ee1</div><div class="swatch-name">Info</div><div class="swatch-var">--info</div></div>
+    </div>
+
+    <div class="subsection-title">Fondos de tarjeta con estado</div>
+    <div class="swatch-row">
+      <div class="swatch"><div class="swatch-box" style="background:#051a12;border-color:rgba(16,185,129,0.28)">#051a12</div><div class="swatch-name">Tarjeta OK (oscuro)</div><div class="swatch-var">--card-success-bg</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#1c1500;border-color:rgba(245,158,11,0.32)">#1c1500</div><div class="swatch-name">Tarjeta alerta (oscuro)</div><div class="swatch-var">--card-warning-bg</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#f0fdf9;border-color:rgba(16,185,129,0.4);color:#047857">#f0fdf9</div><div class="swatch-name">Tarjeta OK (claro)</div><div class="swatch-var">--card-success-bg</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#fffbeb;border-color:rgba(245,158,11,0.45);color:#92400e">#fffbeb</div><div class="swatch-name">Tarjeta alerta (claro)</div><div class="swatch-var">--card-warning-bg</div></div>
+    </div>
+  </div>
+
+  <!-- ── 3. Tipografía ── -->
+  <div class="section">
+    <div class="section-title">3. Tipografía</div>
+    <div class="demo-box">
+      <div style="margin-bottom:16px">
+        <div class="typo-row"><span class="typo-spec">--font-ui · DM Sans</span><span style="font-family:'Segoe UI',sans-serif;font-size:14px">DM Sans — texto de interfaz, etiquetas, botones, navegación</span></div>
+        <div class="typo-row"><span class="typo-spec">--font-mono · JetBrains Mono</span><span style="font-family:monospace;font-size:13px">JetBrains Mono — datos, valores numéricos, código, títulos de tarjeta</span></div>
+      </div>
+      <div class="subsection-title" style="margin-top:0">Escala tipográfica</div>
+      <div class="typo-row"><span class="typo-spec">22px · fw600 · page-title</span><span style="font-size:22px;font-weight:600;color:#00253d">Título de página (h1)</span></div>
+      <div class="typo-row"><span class="typo-spec">18px · fw700 · section-title</span><span style="font-size:18px;font-weight:700;color:#0047a1">Título de sección</span></div>
+      <div class="typo-row"><span class="typo-spec">14px · fw600 · body strong</span><span style="font-size:14px;font-weight:600">Texto destacado / labels</span></div>
+      <div class="typo-row"><span class="typo-spec">13px · fw500 · card-title (mono)</span><span style="font-size:13px;font-weight:700;font-family:monospace;letter-spacing:0.06em">TÍTULO DE TARJETA</span></div>
+      <div class="typo-row"><span class="typo-spec">13px · fw400 · body</span><span style="font-size:13px">Texto de cuerpo principal, descripciones, botones normales</span></div>
+      <div class="typo-row"><span class="typo-spec">12px · fw400 · body-sm</span><span style="font-size:12px;color:#4c6480">Texto secundario, metadatos, timestamps</span></div>
+      <div class="typo-row"><span class="typo-spec">11px · fw700 · badge (mono)</span><span style="font-size:11px;font-weight:700;font-family:monospace">BADGE / ESTADO</span></div>
+      <div class="typo-row"><span class="typo-spec">10px · fw600 · label (mono)</span><span style="font-size:10px;font-weight:600;font-family:monospace;letter-spacing:0.08em;text-transform:uppercase">ETIQUETA DE CAMPO</span></div>
+    </div>
+  </div>
+
+  <!-- ── 4. Botones ── -->
+  <div class="section">
+    <div class="section-title">4. Botones</div>
+    <div class="dark-preview">
+      <div class="diagram-label" style="text-align:left;margin-bottom:12px">Tema oscuro</div>
+      <div>
+        <span class="btn-demo btn-primary-d">btn-primary</span>
+        <span class="btn-demo btn-secondary-d">btn-secondary</span>
+        <span class="btn-demo btn-ghost-d">btn-ghost</span>
+        <span class="btn-demo btn-danger-d">btn-danger</span>
+        <span class="btn-demo btn-primary-d btn-sm" style="opacity:0.4">disabled</span>
+      </div>
+      <div style="margin-top:8px">
+        <span class="btn-demo btn-primary-d btn-sm">btn-sm</span>
+        <span class="btn-demo btn-primary-d">Normal</span>
+        <span class="btn-demo btn-primary-d btn-lg">btn-lg</span>
+      </div>
+    </div>
+    <div class="demo-box">
+      <div class="diagram-label" style="text-align:left;margin-bottom:12px">Tema claro</div>
+      <div>
+        <span class="btn-demo btn-primary-l">btn-primary</span>
+        <span class="btn-demo btn-secondary-l">btn-secondary</span>
+        <span class="btn-demo btn-ghost-l">btn-ghost</span>
+        <span class="btn-demo btn-danger-l">btn-danger</span>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:8px">
+      <div class="demo-box"><span style="font-weight:700;color:#0047a1;font-size:12px">Cuándo usar cada botón</span><br><br>
+        <div class="desc"><b>btn-primary</b> — acción principal de la tarjeta (Calcular, Verificar, Importar)<br><br>
+        <b>btn-secondary</b> — acciones secundarias (Visualizar, Exportar CSV, Ver errores)<br><br>
+        <b>btn-ghost</b> — acciones de contexto (cerrar modal, cambiar carpeta, toggles)<br><br>
+        <b>btn-danger</b> — acciones destructivas (eliminar regla, borrar datos)</div>
+      </div>
+      <div class="demo-box"><span style="font-weight:700;color:#0047a1;font-size:12px">Modificadores de tamaño</span><br><br>
+        <div class="desc"><b>btn-sm</b> — botones dentro de tarjetas, en tablas<br><br>
+        <b>(normal)</b> — botones de formulario principales<br><br>
+        <b>btn-lg</b> — CTAs principales de página<br><br>
+        <b>disabled</b> — aplicar atributo HTML disabled, no clase CSS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. Tarjetas ── -->
+  <div class="section">
+    <div class="section-title">5. Tarjetas (Card)</div>
+    <div class="dark-preview">
+      <div class="grid-3">
+        <div>
+          <div class="card-demo card-normal-d">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+              <div><div style="font-family:monospace;font-size:11px;font-weight:700;color:#466a84;letter-spacing:0.06em">TARJETA BASE</div><div style="font-size:11px;color:#466a84;margin-top:2px">Sin datos cargados</div></div>
+              <span class="badge-demo badge-sin">SIN DATOS</span>
+            </div>
+            <div style="display:flex;gap:6px"><span class="btn-demo btn-primary-d btn-sm">Calcular</span><span class="btn-demo btn-secondary-d btn-sm" style="opacity:0.4">Ver</span></div>
+          </div>
+          <div class="label" style="text-align:center">Estado: vacío / sin calcular</div>
+          <div class="desc" style="text-align:center">border: --border<br>bg: --bg-surface</div>
+        </div>
+        <div>
+          <div class="card-demo card-ok-d">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+              <div><div style="font-family:monospace;font-size:11px;font-weight:700;color:#ddeef8;letter-spacing:0.06em">TARJETA CARGADA</div><div style="font-size:11px;color:#466a84;margin-top:2px">Datos calculados OK</div></div>
+              <span class="badge-demo badge-ok">CALCULADO</span>
+            </div>
+            <div style="border-top:1px solid #153050;padding-top:8px;margin-bottom:12px"><span style="font-family:monospace;font-size:18px;font-weight:700;color:#009ee1">1.234</span> <span style="font-size:12px;color:#466a84">registros</span></div>
+            <div style="display:flex;gap:6px"><span class="btn-demo btn-primary-d btn-sm">Recalcular</span><span class="btn-demo btn-secondary-d btn-sm">Visualizar</span></div>
+          </div>
+          <div class="label" style="text-align:center">Estado: OK / calculado</div>
+          <div class="desc" style="text-align:center">border: --card-success-border<br>bg: --card-success-bg</div>
+        </div>
+        <div>
+          <div class="card-demo card-warn-d">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+              <div><div style="font-family:monospace;font-size:11px;font-weight:700;color:#ddeef8;letter-spacing:0.06em">TARJETA ALERTA</div><div style="font-size:11px;color:#466a84;margin-top:2px">Problemas detectados</div></div>
+              <span class="badge-demo badge-warn">ALERTAS (5)</span>
+            </div>
+            <div style="border-top:1px solid #153050;padding-top:8px;margin-bottom:12px"><span style="font-family:monospace;font-size:18px;font-weight:700;color:#f59e0b">5</span> <span style="font-size:12px;color:#466a84">referencias con problemas</span></div>
+            <div style="display:flex;gap:6px"><span class="btn-demo btn-primary-d btn-sm">Verificar</span><span class="btn-demo btn-secondary-d btn-sm">Ver alertas</span></div>
+          </div>
+          <div class="label" style="text-align:center">Estado: con alertas / errores</div>
+          <div class="desc" style="text-align:center">border: --card-warning-border<br>bg: --card-warning-bg</div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-box" style="margin-top:8px">
+      <span style="font-weight:700;color:#0047a1;font-size:12px">Anatomía de una tarjeta</span>
+      <div class="desc" style="margin-top:8px">
+        <b>.card</b> — contenedor con border, border-radius:10px (--radius-lg), padding:20px<br>
+        <b>.card-header</b> — flex row, justify-content:space-between, margin-bottom:16px. Contiene el bloque de título+descripción a la izquierda y el badge de estado a la derecha.<br>
+        <b>Título de tarjeta</b> — font-family:var(--font-mono), font-size:13px, font-weight:700, letter-spacing:0.06em, MAYÚSCULAS.<br>
+        <b>Descripción</b> — font-size:12px, color:var(--text-muted)<br>
+        <b>Línea de datos</b> (opcional) — border-top:1px solid var(--border), padding-top:8px, margin-bottom:14px. Muestra el contador con font-size:16px, font-weight:700, color:var(--accent) en font-mono.<br>
+        <b>Fila de botones</b> — display:flex, gap:8px, flex-wrap:wrap. Siempre .btn-sm.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 6. Badges ── -->
+  <div class="section">
+    <div class="section-title">6. Badges de Estado</div>
+    <div class="dark-preview">
+      <div style="margin-bottom:8px"><div class="label" style="color:#466a84;margin-bottom:6px">Tema oscuro</div>
+        <span class="badge-demo badge-sin">SIN DATOS</span>
+        <span class="badge-demo badge-ok">CARGADO</span>
+        <span class="badge-demo badge-ok">CALCULADO</span>
+        <span class="badge-demo badge-ok">OK</span>
+        <span class="badge-demo badge-warn">ALERTAS (12)</span>
+        <span class="badge-demo badge-warn">ERRORES (3)</span>
+        <span class="badge-demo badge-err">ERROR</span>
+      </div>
+    </div>
+    <div class="demo-box">
+      <div class="label" style="margin-bottom:6px">Tema claro</div>
+      <span class="badge-demo badge-sin-l">SIN DATOS</span>
+      <span class="badge-demo badge-ok-l">CARGADO</span>
+      <span class="badge-demo badge-ok-l">OK</span>
+      <span class="badge-demo badge-warn-l">ALERTAS (12)</span>
+      <span class="badge-demo badge-err-l">ERROR</span>
+    </div>
+    <div class="desc" style="margin-top:8px"><b>Regla de uso</b>: los badges van siempre dentro de <code>.card-header</code>, alineados a la derecha. padding:3px 10px, border-radius:999px, font-size:11px, font-weight:700, font-family:monospace, border:1px solid.</div>
+  </div>
+
+  <!-- ── 7. Navegación ── -->
+  <div class="section">
+    <div class="section-title">7. Navegación Lateral</div>
+    <div style="display:flex;gap:24px;align-items:flex-start">
+      <div class="nav-demo">
+        <div class="nav-logo-demo">
+          <div style="width:100%;height:24px;background:rgba(0,158,225,0.2);border-radius:4px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:8px;color:#009ee1;font-family:monospace">LOGO.PNG</div>
+          <div class="nav-logo-text-demo">RCCapacity</div>
+          <div class="nav-logo-sub-demo">Planificación de capacidad v2.0</div>
+        </div>
+        <div style="padding:12px 8px;flex:1">
+          <div class="nav-section-demo">Navegación</div>
+          <div class="nav-link-demo">
+            <svg viewBox="0 0 20 20" fill="#7aafc9" width="16" height="16"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" clip-rule="evenodd"/></svg>
+            MAESTROS
+          </div>
+          <div class="nav-link-demo nav-link-active">
+            <svg viewBox="0 0 20 20" fill="#009ee1" width="16" height="16"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+            VERIFICACIONES
+          </div>
+          <div class="nav-link-demo">
+            <svg viewBox="0 0 20 20" fill="#7aafc9" width="16" height="16"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+            REGLAS
+          </div>
+          <div class="nav-link-demo">
+            <svg viewBox="0 0 20 20" fill="#7aafc9" width="16" height="16"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+            RESULTADOS
+          </div>
+        </div>
+        <div style="border-top:1px solid #153050;padding:8px 16px;font-size:9px;color:#466a84;font-family:monospace">☀ Modo claro</div>
+        <div style="padding:8px 16px 10px;font-size:9px;color:#466a84;font-family:monospace">📁 Sin carpeta fija</div>
+      </div>
+      <div style="flex:1">
+        <div class="demo-box">
+          <span style="font-weight:700;color:#0047a1;font-size:12px">Anatomía del sidebar</span>
+          <div class="desc" style="margin-top:8px">
+            <b>.nav-logo</b> — cabecera: logo de empresa + nombre app + subtítulo. padding:20px 20px 16px, border-bottom.<br><br>
+            <b>img.nav-company-logo</b> — max-width:148px, margin-bottom:10px. Filter invert en modo oscuro.<br><br>
+            <b>.nav-logo-text</b> — font-mono, 13px, fw600, color:--accent, uppercase, letter-spacing:0.1em.<br><br>
+            <b>.nav-logo-sub</b> — 11px, color:--text-muted, letter-spacing:0.05em.<br><br>
+            <b>.nav-links</b> — padding:12px 8px, flex-column, gap:2px, flex:1 (ocupa el espacio disponible).<br><br>
+            <b>.nav-section-label</b> — 10px, fw600, color:--text-muted, uppercase, letter-spacing:0.1em. Categoriza grupos de links.<br><br>
+            <b>.nav-link</b> — 9px padding vertical, 12px horizontal, border-radius:6px, 13px, fw500. Color por defecto: --text-secondary. Hover: bg --bg-surface-2, color --text-primary.<br><br>
+            <b>.nav-link.active</b> — bg --accent-dim, color --accent.<br><br>
+            <b>.nav-icon</b> — SVG Heroicons solid 20×20, width:18px, height:18px, opacity:0.7 (1.0 en activo).<br><br>
+            <b>ThemeToggle</b> — botón en la base del sidebar, antes de ExportDirIndicator.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 8. Tablas ── -->
+  <div class="section">
+    <div class="section-title">8. Tablas de Datos</div>
+    <div class="dark-preview">
+      <table class="table-demo">
+        <thead>
+          <tr><th>REFERENCIA</th><th>MEZCLA</th><th>CM</th><th style="text-align:right">KG</th><th style="text-align:right">OCUPACIÓN</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>REF001</td><td>MZC-A</td><td>EXT01</td><td style="text-align:right">1.250,00</td><td style="text-align:right;color:#10b981;font-weight:700">45,3 %</td></tr>
+          <tr><td>REF002</td><td>MZC-B</td><td>EXT02</td><td style="text-align:right">890,00</td><td style="text-align:right;color:#f59e0b;font-weight:700">87,1 %</td></tr>
+          <tr><td>REF003</td><td>MZC-A</td><td>EXT01</td><td style="text-align:right">340,00</td><td style="text-align:right;color:#ef4444;font-weight:700">112,4 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="demo-box">
+      <span style="font-weight:700;color:#0047a1;font-size:12px">Clases y estructura</span>
+      <div class="desc" style="margin-top:8px">
+        <b>.table-wrap</b> — contenedor con overflow-x:auto, border:1px solid --border, border-radius:--radius.<br>
+        <b>.data-table</b> — width:100%, border-collapse:collapse, font-size:12px, font-family:--font-mono.<br>
+        <b>thead th</b> — bg:--bg-surface-2, color:--text-muted, 10px, uppercase, letter-spacing:0.07em, padding:8px 12px, sticky top:0.<br>
+        <b>tbody td</b> — padding:7px 12px, border-bottom:1px solid --border-dim, color:--text-primary.<br>
+        <b>tr:hover td</b> — bg:--bg-surface-2.<br>
+        MasterViewer añade paginación (50 filas por página) y filtros por columna a cualquier tabla de datos.
+      </div>
+    </div>
+
+    <div class="subsection-title">Color-coding de ocupación</div>
+    <div class="demo-box">
+      <div class="ocup-demo"><div class="ocup-bar" style="width:45%;background:#10b981"></div><span style="font-weight:700;color:#10b981">45 %</span><span class="desc">— Verde: &lt; 85 % (--success)</span></div>
+      <div class="ocup-demo"><div class="ocup-bar" style="width:87%;background:#f59e0b"></div><span style="font-weight:700;color:#f59e0b">87 %</span><span class="desc">— Ámbar: 85–100 % (--warning)</span></div>
+      <div class="ocup-demo"><div class="ocup-bar" style="width:100%;background:#ef4444"></div><span style="font-weight:700;color:#ef4444">112 %</span><span class="desc">— Rojo: &gt; 100 % (--error)</span></div>
+    </div>
+  </div>
+
+  <!-- ── 9. Formularios ── -->
+  <div class="section">
+    <div class="section-title">9. Formularios</div>
+    <div class="dark-preview" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <label class="label-demo">Campo de texto</label>
+        <input class="input-demo" type="text" value="Valor de ejemplo" readonly>
+        <label class="label-demo">Selector</label>
+        <select class="input-demo"><option>Opción A</option><option>Opción B</option></select>
+      </div>
+      <div>
+        <label class="label-demo">Área de texto</label>
+        <textarea class="input-demo" rows="3" readonly>Contenido de ejemplo</textarea>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:8px"><b>.form-group</b> — flex-column, gap:6px. <b>.form-label</b> — 11px, fw600, --text-muted, uppercase, letter-spacing:0.07em. <b>.form-control</b> — bg:--bg-primary, border:1px solid --border, border-radius:6px, color:--text-primary, 13px. Focus: border-color --accent.</div>
+  </div>
+
+  <!-- ── 10. Alertas y Toasts ── -->
+  <div class="section">
+    <div class="section-title">10. Alertas y Notificaciones</div>
+    <div class="grid-2" style="gap:16px">
+      <div>
+        <div class="subsection-title" style="margin-top:0">Alertas (banners en página)</div>
+        <div class="dark-preview">
+          <div class="alert-demo alert-s">✓ Todos los maestros cargados</div>
+          <div class="alert-demo alert-e">✕ Error al importar el fichero</div>
+          <div class="alert-demo alert-w">⚠ 3 referencias sin cobertura</div>
+          <div class="alert-demo alert-i">ℹ Datos sin guardar en sesión</div>
+        </div>
+        <div class="desc"><b>.alert.alert-success/error/warning/info</b> — padding:12px 14px, border-radius:6px, border-left:3px solid, font-size:13px.</div>
+      </div>
+      <div>
+        <div class="subsection-title" style="margin-top:0">Toasts (notificaciones flotantes)</div>
+        <div class="dark-preview">
+          <div class="toast-demo" style="border-left-color:#10b981"><div class="toast-dot-demo" style="background:#10b981"></div>Importación completada</div>
+          <div class="toast-demo" style="border-left-color:#ef4444"><div class="toast-dot-demo" style="background:#ef4444"></div>Error al procesar CSV</div>
+          <div class="toast-demo" style="border-left-color:#f59e0b"><div class="toast-dot-demo" style="background:#f59e0b"></div>12 referencias sin ruta</div>
+        </div>
+        <div class="desc">Aparecen en <b>position:fixed, bottom:24px, right:24px</b>. Se cierran automáticamente. Llamar con <code>toast.success()</code>, <code>toast.error()</code>, <code>toast.warning()</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 11. Pasos / Wizard ── -->
+  <div class="section">
+    <div class="section-title">11. Indicador de Pasos (Wizard)</div>
+    <div class="dark-preview">
+      <div class="steps-demo">
+        <div class="step-demo step-done"><div class="step-bubble-demo">✓</div><span class="step-label-demo">Subida</span></div>
+        <div class="step-connector-demo"></div>
+        <div class="step-demo step-done"><div class="step-bubble-demo">✓</div><span class="step-label-demo">Mapeo</span></div>
+        <div class="step-connector-demo"></div>
+        <div class="step-demo step-active"><div class="step-bubble-demo">3</div><span class="step-label-demo">Validación</span></div>
+        <div class="step-connector-demo"></div>
+        <div class="step-demo step-future"><div class="step-bubble-demo">4</div><span class="step-label-demo">Importar</span></div>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:8px"><b>.steps</b> → <b>.step.done / .step.active / .step</b> → <b>.step-bubble</b> + <b>.step-label</b>, separados por <b>.step-connector</b>. El wizard de importación de CSVs tiene 4 pasos.</div>
+  </div>
+
+  <!-- ── 12. Barra de progreso ── -->
+  <div class="section">
+    <div class="section-title">12. Barra de Progreso</div>
+    <div class="dark-preview">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#466a84;font-family:monospace;margin-bottom:6px"><span>Optimizando... iter 180/300 · Pico actual: 72,4 %</span><span>60 %</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:60%"></div></div>
+    </div>
+    <div class="desc" style="margin-top:8px">Usada en cálculos asíncronos (Escenario 0). Track: bg:--bg-surface-2, height:6px, border-radius:4px. Fill: bg:--accent, transition:width 0.25s ease.</div>
+  </div>
+
+  <!-- ── 13. Grids ── -->
+  <div class="section">
+    <div class="section-title">13. Sistema de Grids</div>
+    <div class="demo-box">
+      <div class="subsection-title" style="margin-top:0">.grid-2 — 2 columnas</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <div style="background:#e6f1ff;border:1px dashed #b8d0e8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#4c6480">Columna 1</div>
+        <div style="background:#e6f1ff;border:1px dashed #b8d0e8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#4c6480">Columna 2</div>
+      </div>
+      <div class="subsection-title">.grid-3 — 3 columnas</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+        <div style="background:#e6f1ff;border:1px dashed #b8d0e8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#4c6480">Col 1</div>
+        <div style="background:#e6f1ff;border:1px dashed #b8d0e8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#4c6480">Col 2</div>
+        <div style="background:#e6f1ff;border:1px dashed #b8d0e8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#4c6480">Col 3</div>
+      </div>
+      <div class="desc">La mayoría de tarjetas usan <b>.grid-2</b>. Los grids se aplican dentro de <b>.page-body</b>. Gap: 16px. Cada celda ocupa el ancho que le corresponde por el grid (1fr). Una tarjeta puede ocupar toda la fila si es la única en su fila del grid-2.</div>
+    </div>
+  </div>
+
+  <!-- ── 14. Espaciado y radio ── -->
+  <div class="section">
+    <div class="section-title">14. Espaciado y Radios de Borde</div>
+    <div class="grid-2">
+      <div class="demo-box">
+        <span style="font-weight:700;color:#0047a1;font-size:12px">Border Radius</span>
+        <div style="margin-top:12px;display:flex;gap:16px;align-items:flex-end">
+          <div style="text-align:center"><div style="width:40px;height:40px;background:#e6f1ff;border:1px solid #b8d0e8;border-radius:4px;margin:0 auto 4px"></div><div class="desc">--radius-sm<br>4px</div></div>
+          <div style="text-align:center"><div style="width:40px;height:40px;background:#e6f1ff;border:1px solid #b8d0e8;border-radius:6px;margin:0 auto 4px"></div><div class="desc">--radius<br>6px</div></div>
+          <div style="text-align:center"><div style="width:40px;height:40px;background:#e6f1ff;border:1px solid #b8d0e8;border-radius:10px;margin:0 auto 4px"></div><div class="desc">--radius-lg<br>10px</div></div>
+          <div style="text-align:center"><div style="width:40px;height:20px;background:#e6f1ff;border:1px solid #b8d0e8;border-radius:999px;margin:0 auto 4px"></div><div class="desc">999px<br>pills/badges</div></div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <span style="font-weight:700;color:#0047a1;font-size:12px">Aplicación de radios</span>
+        <div class="desc" style="margin-top:8px">
+          <b>4px (--radius-sm)</b> — pills de campo, inputs pequeños<br>
+          <b>6px (--radius)</b> — botones, inputs, dropdowns, toasts, alerts<br>
+          <b>10px (--radius-lg)</b> — tarjetas (.card), nav sidebar, modales<br>
+          <b>999px</b> — badges de estado, pill tags
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 15. Modo claro/oscuro ── -->
+  <div class="section">
+    <div class="section-title">15. Modo Claro / Modo Oscuro</div>
+    <div class="demo-box">
+      <span style="font-weight:700;color:#0047a1;font-size:12px">Cómo funciona</span>
+      <div class="desc" style="margin-top:8px">
+        El tema se controla con el atributo <code>data-theme="light"</code> o <code>data-theme="dark"</code> en <code>document.documentElement</code>.<br><br>
+        El componente <b>ThemeToggle</b> (pie del sidebar) alterna entre temas y persiste la preferencia en <code>localStorage</code> con la clave <code>rcCapacityTheme</code>.<br><br>
+        <b>Regla crítica</b>: nunca usar colores hexadecimales hardcodeados en JSX. Siempre usar variables CSS como <code>var(--card-success-bg)</code>. Esto garantiza que el cambio de tema funcione automáticamente sin código JS adicional.<br><br>
+        Los colores semánticos (--success, --error, --warning) son idénticos en ambos temas. Solo cambian los fondos estructurales, textos y bordes.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Footer ── -->
+  <div style="text-align:center;padding:32px 0;border-top:1px solid #b8d0e8;margin-top:16px;color:#8d9eae;font-size:11px">
+    RCCapacity Design System · Walki Plasbel · v2.9 · 2026
+  </div>
+
+</div>
+</body>
+</html>
