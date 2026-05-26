@@ -21,6 +21,7 @@ const ERRORES_FIXED_NAMES = new Set(ERRORES_FIXED.map((c) => c.name));
 const ALL_SCHEMA_FIELDS = [
   ...(MASTER_SCHEMAS_META.PRODUCTO_COMPLEJO  ?? []),
   ...(MASTER_SCHEMAS_META.SETUP_EXTRUSORAS   ?? []),
+  ...(MASTER_SCHEMAS_META.MEZCLAS            ?? []),
 ];
 function resolveFieldType(name) {
   return ALL_SCHEMA_FIELDS.find((f) => f.name === name)?.type ?? "decimal";
@@ -60,6 +61,7 @@ export default function IntermediasCalculadasPage() {
   const producto         = useStore((s) => s.masters.PRODUCTO?.records         ?? []);
   const enrutaMezclas    = useStore((s) => s.masters.ENRUTAMIENTO_MEZCLAS?.records ?? []);
   const setupExtrusoras  = useStore((s) => s.masters.SETUP_EXTRUSORAS?.records  ?? []);
+  const mezclas          = useStore((s) => s.masters.MEZCLAS?.records           ?? []);
   const definiciones     = useStore((s) => s.calculos.DEFINICIONES);
 
   const [lastErrors,         setLastErrors]         = useState([]);
@@ -106,6 +108,7 @@ export default function IntermediasCalculadasPage() {
       producto,
       enrutamientoMezclas: enrutaMezclas,
       setupExtrusoras,
+      mezclas,
       calculos: definiciones,
     });
     setEnrutamientos(newRows);

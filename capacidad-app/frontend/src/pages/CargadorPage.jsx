@@ -9,7 +9,7 @@ import { MASTER_SCHEMAS_META } from "../masterSchemas";
 import { parseCsvFile, applyMappingAndValidate } from "../services/csvParser";
 import useStore from "../state";
 
-const MASTERS = ["DEMANDA", "PRODUCTO", "ENRUTAMIENTO_MEZCLAS", "CALENDARIO", "SETUP_EXTRUSORAS"];
+const MASTERS = ["DEMANDA", "PRODUCTO", "ENRUTAMIENTO_MEZCLAS", "CALENDARIO", "SETUP_EXTRUSORAS", "MEZCLAS"];
 
 // Display labels for master selectors and UI text (internal keys use underscores)
 const MASTER_LABELS = {
@@ -18,6 +18,7 @@ const MASTER_LABELS = {
   ENRUTAMIENTO_MEZCLAS: "ENRUTAMIENTO MEZCLAS",
   CALENDARIO: "CALENDARIO",
   SETUP_EXTRUSORAS: "SETUP EXTRUSORAS",
+  MEZCLAS: "MEZCLAS",
 };
 
 const STEPS = [

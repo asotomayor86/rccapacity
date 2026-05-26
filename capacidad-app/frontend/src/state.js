@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-const MASTER_NAMES = ["DEMANDA", "PRODUCTO", "ENRUTAMIENTO_MEZCLAS", "CALENDARIO", "SETUP_EXTRUSORAS"];
+const MASTER_NAMES = ["DEMANDA", "PRODUCTO", "ENRUTAMIENTO_MEZCLAS", "CALENDARIO", "SETUP_EXTRUSORAS", "MEZCLAS"];
 
 const emptyMaster = () => ({ records: [], loaded_at: null, count: 0 });
 
@@ -34,6 +34,7 @@ const useStore = create((set, get) => ({
     REFS_SIN_PRODUCTO:     null,
     REFS_SIN_MEZCLA:       null,
     REFS_SIN_ENRUTAMIENTO: null,
+    MEZCLAS_SIN_FICHA:     null,
   },
 
   // ── Actions ──────────────────────────────────────────────────────────────

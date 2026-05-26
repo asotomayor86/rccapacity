@@ -172,6 +172,16 @@ const MODAL_SECTIONS = [
       { key: "TRATADOR_CORONA",     label: "Tratador corona",           type: "boolean" },
     ],
   },
+  {
+    title: "Parámetros de rendimiento",
+    fields: [
+      { key: "D_DIE",            label: "D DIE (mm)",                  type: "decimal", positive: true },
+      { key: "COOLING_FACTOR",   label: "Cooling factor",              type: "decimal", positive: true },
+      { key: "CORONA_KW",        label: "Corona (kW)",                 type: "decimal" },
+      { key: "V_MAX_SOLDADOR",   label: "V máx. soldador (m/min)",     type: "decimal", positive: true },
+      { key: "V_MAX_ABREFACIL",  label: "V máx. abrefácil (m/min)",    type: "decimal", positive: true },
+    ],
+  },
 ];
 
 const POSITIVE_FIELDS = new Set(

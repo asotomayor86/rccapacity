@@ -38,11 +38,12 @@ capacidad-app/
 │   │   │   └── SetupExtrusorasPage.jsx       # Tabla de configuraciones de extrusoras
 │   │   ├── services/
 │   │   │   ├── csvParser.js    # Parseo, filtros, mapeo y validación de CSVs
-│   │   │   ├── engine.js       # calcularEnrutamientos (RS 2dp, errores dinámicos)
+│   │   │   ├── engine.js       # calcularEnrutamientos + AST de fórmulas (eval, deps, ciclos)
 │   │   │   ├── escenario0.js   # LP water-filling anual (Escenario 0)
 │   │   │   ├── exporter.js     # Exportación CSV/TXT
 │   │   │   ├── intermedias.js  # calcularProductoComplejo (filtra por Demanda)
-│   │   │   ├── verificaciones.js  # Funciones puras V1/V2/V3 de cruce entre maestros
+│   │   │   ├── modeloCuellos.js   # Modelo de rendimiento por cuellos: defs por defecto
+│   │   │   ├── verificaciones.js  # Funciones puras V1/V2/V3/V4 de cruce entre maestros
 │   │   │   └── state.js        # Store Zustand
 │   │   └── components/
 │   │       ├── MasterViewer.jsx   # Modal paginado con filtros, schema dinámico
@@ -54,7 +55,11 @@ capacidad-app/
 │   │       └── Toast.jsx
 │   ├── public/
 │   │   ├── logo.png          # Logo corporativo Walki Plasbel (copiado a dist/ en build)
-│   │   └── estilos_old.css   # Tema anterior ámbar/industrial (backup)
+│   │   ├── estilos_old.css   # Tema anterior ámbar/industrial (backup)
+│   │   └── plantillas/
+│   │       └── CALCULOS_MODELO_CUELLOS.csv  # 8 definiciones del modelo de cuellos (regenerable)
+│   ├── scripts/
+│   │   └── gen_plantilla_modelo_cuellos.mjs  # Regenera el CSV desde modeloCuellos.js
 │   ├── vite.config.js        # singlefile solo JS; CSS separado; stripCrossorigin plugin
 │   └── package.json
 ├── dist/                     # Build de producción (3 ficheros para distribuir)
@@ -146,6 +151,15 @@ El campo `ES_ACTUAL` en SETUP_EXTRUSORAS indica la configuración activa **dentr
 ### Edición en modal sin persistencia externa
 Las ediciones de configuraciones de extrusoras se aplican directamente al store Zustand mediante `updateSetupExtrusora`. No hay endpoint ni fichero intermedio: la exportación CSV desde el header siempre refleja el estado actual del store, incluyendo ediciones. Los campos `NOMBRE_EXTRUSORA` y `ES_ACTUAL` están protegidos contra edición directa en el modal (se gestionan con acciones propias).
 
+### AST de fórmulas con propagación de null y orden topológico
+Las definiciones de cálculo (`calculos.DEFINICIONES`) son árboles (`NodoFormula`) con los tipos: `constante`, `nulo`, `campo`, `operacion` (binaria `+ − × ÷ ^`), `operacion_naria` (min/max ≥2 hijos), `si_aplica` (condición booleana → valor o null), `booleana` (and/or/not) y `referencia_calculo` (resuelto por NOMBRE). El motor `evaluarArbol(nodo, fila, ctx)` propaga `null` aguas arriba en aritmética (`2 + null = null`, `0 × null = null`), ignora null en min/max (todos null → null), y aplica corto-circuito en booleanas. `ordenarCalculosPorDependencia` calcula un orden topológico vía DFS y detecta ciclos: si A→B y B→A se devuelve un error `CICLO_EN_CALCULOS` antes de evaluar cualquier fila. **Caché por fila**: el `ctx` contiene un `Map` reutilizado al evaluar referencias dentro de la misma fila, de modo que `Q_HUSILLO` referenciado por `RENDIMIENTO` y por otro cálculo en debug se computa una sola vez. **Identidad de referencia**: las referencias se resuelven por `nombre` (no por `id`), lo que permite que el modelo embebido sobreviva a regeneraciones de UUIDs al importar/exportar.
+
+### MEZCLAS como maestro opcional y tercera fuente del constructor
+El maestro `MEZCLAS` (clave `MEZCLA`, propiedades `K_HUSILLO`, `DSO_EF`, `RHO_FILM`, `PCT_PCR`, `RESINA_DOMINANTE`) **no está en `CORE_MASTERS`**: el motor de Enrutamientos puede ejecutarse sin él. Sólo se exige cuando algún árbol activo de RS/RENDIMIENTO usa `fuente === "MEZCLAS"`; en ese caso el motor emite `MEZCLA_SIN_PROPIEDADES` para mezclas con demanda que no tienen ficha. Esto permite que los proyectos legacy (modelo con sólo `+ − × ÷ ^` sobre PC/SE) sigan funcionando sin cargar MEZCLAS. En el constructor de árboles, el `InputSelector` muestra tres columnas (PC, SE, MEZCLAS) pero filtra MEZCLA/RESINA_DOMINANTE del dropdown numérico. El schema dinámico de la tabla de salida `ENRUTAMIENTOS` añade columnas `MZ_*` solo si los árboles las usan (misma lógica que las existentes `PC_*`/`SE_*`).
+
+### Modelo de cuellos: fuente embebida + plantilla CSV regenerable
+El modelo de rendimiento por cuellos de botella se define **una sola vez** en `services/modeloCuellos.js` con helpers funcionales (`mul/div/cte/pc/se/mz/ref/minN/siAplica/or`) que producen árboles legibles. El botón "Cargar modelo por defecto" en `CalculosPage` invoca un upsert por NOMBRE contra esa lista embebida (no necesita fetch). La plantilla CSV física `public/plantillas/CALCULOS_MODELO_CUELLOS.csv` se mantiene como artefacto intercambiable y se **regenera con `scripts/gen_plantilla_modelo_cuellos.mjs`** desde la misma fuente embebida — evita duplicar la verdad. `RS` queda fuera del modelo: la plantilla nunca lo toca para no pisar la fórmula que el usuario ya tenga.
+
 ---
 
 ## Servicios JS
@@ -156,15 +170,22 @@ Las ediciones de configuraciones de extrusoras se aplican directamente al store 
 | `csvParser.js` | `applyFilters(raw, filters)` | Filtra filas raw por operadores |
 | `csvParser.js` | `applyMappingAndValidate(...)` | Mapea + valida tipos → informe |
 | `engine.js` | `calculate({...})` | Motor de cálculo → store.setResults |
-| `engine.js` | `calcularEnrutamientos({...})` | Cruza Producto Simple/Doble × Mezcla × Extrusora × Setup. RS redondeada a 2dp. Errores incluyen mezcla, extrusora y campos de fórmula. |
+| `engine.js` | `calcularEnrutamientos({..., mezclas, calculos})` | Cruza Producto Simple/Doble × Mezcla × Extrusora × Setup. Resuelve fila de MEZCLAS por `PRODUCTO.MEZCLA → MEZCLAS[MEZCLA]`. RS redondeada a 2dp. Errores incluyen mezcla, extrusora y campos de fórmula (transitivos via referencias). |
+| `engine.js` | `evaluarArbol(nodo, fila, ctx?)` | Evalúa AST de fórmula. Soporta: constante/nulo/campo/operacion/operacion_naria/si_aplica/booleana/referencia_calculo. Propaga `null` en aritmética; ignora null en min/max; ctx provee caché por fila y resolución de referencias por NOMBRE. |
+| `engine.js` | `camposDeArbol(nodo, defs?)` | Recolecta `{fuente, campo}` usados por el árbol; sigue transitivamente las referencias entre cálculos cuando se pasan las definiciones. |
+| `engine.js` | `ordenarCalculosPorDependencia(defs)` | Devuelve `{ orden, ciclos }`: orden topológico de cálculos (referenciados antes que referenciadores) y lista de ciclos detectados. |
 | `exporter.js` | `exportToCsv(records)` | Genera y descarga CSV resultado |
 | `exporter.js` | `exportLog(lines)` | Genera y descarga log TXT |
-| `exporter.js` | `exportSetupExtrusoras(records, fechaRevision)` | CSV de extrusoras con metainfo |
+| `exporter.js` | `exportSetupExtrusoras(records, fechaRevision)` | CSV de extrusoras con metainfo (incluye D_DIE, COOLING_FACTOR, CORONA_KW, V_MAX_SOLDADOR, V_MAX_ABREFACIL) |
 | `intermedias.js` | `calcularProductoComplejo(rows, reglas)` | Genera PRODUCTO_COMPLEJO desde reglas |
 | `escenario0.js` | `calcularEscenario0({...})` | LP water-filling anual: asigna demanda a (variante,CM) minimizando ocupación pico |
+| `modeloCuellos.js` | `MODELO_CUELLOS_DEFS` | Lista exportable con las 8 definiciones del modelo (Q_HUSILLO, Q_DSO, Q_LINEA, Q_POST_*, Q_POST, RENDIMIENTO). |
+| `modeloCuellos.js` | `MODELO_CUELLOS_REQUIERE` | Variables externas requeridas agrupadas por maestro. Usado por el modal informativo. |
+| `modeloCuellos.js` | `MODELO_CUELLOS_RANGOS` | Rangos típicos de calibración (K_HUSILLO, DSO_EF, RHO_FILM, COOLING_FACTOR). |
 | `verificaciones.js` | `verificarRefsDemandaNoEnProducto(d, p)` | V1: refs en Demanda sin ficha en Producto |
 | `verificaciones.js` | `verificarRefsSinMezcla(d, p)` | V2: refs con demanda cuya MEZCLA está vacía en Producto |
 | `verificaciones.js` | `verificarMezclaSinEnrutamiento(d, p, e)` | V3: refs cuya mezcla no está en Enrutamiento |
+| `verificaciones.js` | `verificarMezclasSinFicha(d, p, m)` | V4: mezclas con demanda sin ficha en el maestro MEZCLAS. Granularidad por MEZCLA única. |
 | `state.js` | `importMaster(name, records)` | Actualiza maestro en Zustand store |
 | `state.js` | `setVerificacion(name, records)` | Guarda resultado de una verificación (null = sin calcular) |
 | `state.js` | `updateSetupExtrusora(nombre, index, campos)` | Edición parcial de una configuración |
@@ -211,6 +232,43 @@ Nuevo módulo Setup Extrusoras:
 - Store: campo `setupExtrusorasRevision` + invariante ES_ACTUAL (scope global, corregida en Sprint 6).
 - `exportSetupExtrusoras()` con `_META_FECHA_REVISION` y `_META_FECHA_EXPORTACION`.
 - `SetupExtrusorasPage.jsx`: tabla horizontal, modal de detalle por secciones, acción "Marcar como actual".
+
+### 2026-05-23 — v3.0 Sprint 13 / 14 / 15 — Modelo de rendimiento por cuellos de botella
+
+Tres sprints implementados en bloque (estrictamente A → B → C por dependencia) que sustituyen la fórmula única de `RENDIMIENTO` por un modelo de cuellos de botella:
+
+```
+RENDIMIENTO [kg/h] = min(Q_HUSILLO, Q_DSO, Q_LINEA, Q_POST)
+```
+
+donde cada `Q_i` modela un subsistema físico (plastificación del husillo, cabezal+enfriamiento, estiraje, post-procesos: corona/soldador/abrefácil).
+
+**Sprint 13 — Operadores avanzados en árboles (`engine.js` + `CalculosPage.jsx`):**
+- Cinco nuevos tipos de `NodoFormula`: `operacion_naria` (min/max, ≥2 hijos), `nulo`, `si_aplica` (condición booleana → valor o null), `booleana` (and/or/not, NOT colapsa a un único operando), `referencia_calculo` (resuelta por `nombre`).
+- `evaluarArbol(nodo, fila, ctx?)` propaga `null` aguas arriba en aritmética (`2 + null = null`), ignora null en n-arias (`min(5, 3, null) = 3`), aplica corto-circuito en booleanas, evalúa `si_aplica` sólo cuando la condición es truthy. El `ctx` lleva `calculosByNombre`, `cache: Map<nombre, resultado>` por fila, `errors` y `missingReported: Set<nombre>` para dedupe.
+- `ordenarCalculosPorDependencia(defs)` con DFS y onStack detecta ciclos. Si `A` referencia a `B` y `B` a `A` → error `CICLO_EN_CALCULOS` antes de evaluar ninguna fila.
+- `camposDeArbol(nodo, defs)` recolecta transitivamente los campos del árbol referenciado (con `visited` para cortar ciclos teóricos durante la recolección).
+- Constructor visual: nuevos botones en `SlotVacio` (**Min, Max, Nulo, Si aplica, Booleano, Cálculo**); `NodoOperacionNaria` con "+ añadir hijo" (mínimo 2); `NodoSiAplica` con slot `condición` que se marca en rojo si no termina en boolean (`esCondicionBoolean`); `NodoBooleana` con selector AND/OR/NOT (transición NOT↔otros recompone hijos); `NodoReferenciaCalculo` con dropdown filtrado y badge rojo si el nombre referenciado no existe. Colores: azul (operación n-aria), gris (nulo), naranja (si_aplica), púrpura (booleana), azul claro (referencia).
+- Enum `DEFINICION_CALCULO.nombre` ampliado a `{ RS | RENDIMIENTO | Q_HUSILLO | Q_DSO | Q_LINEA | Q_POST | Q_POST_CORONA | Q_POST_SOLDADOR | Q_POST_ABREFACIL | AUX_1 | AUX_2 | AUX_3 }`. RS y RENDIMIENTO siguen siendo los únicos obligatorios para habilitar "Calcular".
+- Compatibilidad hacia atrás: cálculos previos con sólo `+ − × ÷ ^` sobre PC/SE siguen funcionando sin cambios (el `ctx` es opcional y no es necesario sin referencias).
+
+**Sprint 14 — Maestro MEZCLAS y parámetros de rendimiento (`masterSchemas.js`, `SetupExtrusorasPage.jsx`, `verificaciones.js`):**
+- Nuevo maestro `MEZCLAS` con schema: `MEZCLA` (clave, cruza con `PRODUCTO.MEZCLA`), `RESINA_DOMINANTE` (documental: LDPE/LLDPE/mLLDPE/HDPE/MIX), `PCT_PCR` (0-100, documental), `K_HUSILLO` (factor ~0,75-1,00), `DSO_EF` (Die Specific Output kg/h·mm, ~0,07-0,30), `RHO_FILM` (densidad sólido kg/m³, ~918-955). Registrado en `MASTER_NAMES`; **no incluido en CORE_MASTERS** (opcional, sólo necesario si las fórmulas usan campos de MEZCLAS). Tarjeta dedicada en `MaestrosPage` con tooltip de distintos; opción en `CargadorPage`.
+- `SETUP_EXTRUSORAS` ampliado con cinco campos del modelo de cuellos: `D_DIE` (mm, diámetro del cabezal; no confundir con `HILERA` string), `COOLING_FACTOR` (multiplicador, ~1,0 single / 1,5 dual / 2,0 triple+chiller), `CORONA_KW` (potencia tratador, 0 si no hay), `V_MAX_SOLDADOR` (m/min), `V_MAX_ABREFACIL` (m/min). Nueva sección "Parámetros de rendimiento" en `ExtrusoraModal`. `SETUP_EXTRUSORAS_COLS` en `exporter.js` actualizado.
+- MEZCLAS expuesto como **tercera fuente** en el constructor de árboles: el `InputSelector` muestra 3 columnas (PC, SE, MEZCLAS), filtrando MEZCLA/RESINA_DOMINANTE del dropdown numérico. `enrutamientosSchema.schemaDeDefiniciones` extendido para emitir columnas `MZ_*` cuando los árboles activos usan campos de MEZCLAS.
+- `engine.calcularEnrutamientos` acepta `mezclas` (nuevo parámetro). Por cada fila resuelve `PRODUCTO_COMPLEJO.REFERENCIA → PRODUCTO.MEZCLA → MEZCLAS[MEZCLA]` y rellena los campos requeridos. Si el árbol activo usa MEZCLAS y la mezcla no tiene ficha → error `MEZCLA_SIN_PROPIEDADES` (deduplicado por mezcla).
+- **V4 — `verificarMezclasSinFicha(demanda, producto, mezclas)`** en `verificaciones.js`: granularidad por MEZCLA única, columnas `MEZCLA · n_REFERENCIAS_AFECTADAS`. Tarjeta en `VerificacionesPage` con el mismo diseño que V1-V3. Key `MEZCLAS_SIN_FICHA` añadida al store.
+
+**Sprint 15 — Definiciones por defecto del modelo (`modeloCuellos.js` + plantilla CSV):**
+- `services/modeloCuellos.js`: definiciones embebidas en código con helpers funcionales (`mul/div/cte/pc/se/mz/ref/minN/siAplica/or`) que producen árboles legibles. Ocho definiciones: `Q_HUSILLO`, `Q_DSO`, `Q_LINEA`, `Q_POST_CORONA`, `Q_POST_SOLDADOR`, `Q_POST_ABREFACIL`, `Q_POST` (min de los tres post), `RENDIMIENTO` (min de los cuatro cuellos). El `id` interno coincide con el `nombre` para que las referencias entre cálculos sobrevivan a regeneraciones de UUIDs. RS queda fuera de la plantilla: el modelo no depende de RS.
+- Botón "**CARGAR MODELO POR DEFECTO**" en cabecera de `CalculosPage` con modal de confirmación que enumera los cálculos a añadir/reemplazar. Hace upsert por `nombre` preservando el `id` del cálculo existente.
+- Botón "**i**" informativo abre modal con: variables requeridas agrupadas por maestro, advertencia de prerequisitos, tabla de rangos típicos (K_HUSILLO ∈ [0,75; 1,00], DSO_EF ∈ [0,07; 0,30] kg/h·mm, RHO_FILM ∈ [918; 955] kg/m³, COOLING_FACTOR ∈ [1,0; 2,0]).
+- Plantilla CSV en `public/plantillas/CALCULOS_MODELO_CUELLOS.csv` con la serialización JSON minified de los 8 árboles. **Regenerable** desde la fuente única (`modeloCuellos.js`) con `scripts/gen_plantilla_modelo_cuellos.mjs` (mismo formato que produce `exporter.exportCalculos`). El botón de importación CSV existente (`autoImportCalculos`) hace upsert por `nombre` y por tanto también acepta esta plantilla.
+- Nuevo error `CALCULO_AUXILIAR_FALTANTE`: cuando un nodo `referencia_calculo` apunta a un nombre sin definir, el motor emite el error una sola vez (dedupe via `missingReported`) y la referencia devuelve `null`; el cálculo padre sigue evaluándose con los Q_* disponibles (si todos faltan → RENDIMIENTO = null).
+
+**Archivos nuevos/modificados:**
+- Nuevos: `services/modeloCuellos.js`, `scripts/gen_plantilla_modelo_cuellos.mjs`, `public/plantillas/CALCULOS_MODELO_CUELLOS.csv`.
+- Modificados: `services/engine.js` (AST, ciclos, refs, mezclas), `services/verificaciones.js` (+V4), `services/exporter.js` (cols SE), `masterSchemas.js` (MEZCLAS + SE), `state.js` (registro MEZCLAS + key V4), `utils/enrutamientosSchema.js` (MZ_* + transitiva), `pages/CalculosPage.jsx` (rediseño completo del constructor), `pages/SetupExtrusorasPage.jsx` (sección PR), `pages/MaestrosPage.jsx` (tarjeta MEZCLAS), `pages/CargadorPage.jsx` (MEZCLAS), `pages/VerificacionesPage.jsx` (V4), `pages/IntermediasCalculadasPage.jsx` (pasa mezclas y tipos MEZCLAS).
 
 ### 2026-05-19 — v2.9 Sprint 12
 **Escenario 0 — Rough Cut Capacity Anual**

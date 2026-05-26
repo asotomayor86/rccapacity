@@ -3,6 +3,7 @@ import { MASTER_SCHEMAS_META } from "../masterSchemas";
 
 const SE_TYPE_MAP = Object.fromEntries((MASTER_SCHEMAS_META.SETUP_EXTRUSORAS ?? []).map((f) => [f.name, f.type]));
 const PC_TYPE_MAP = Object.fromEntries((MASTER_SCHEMAS_META.PRODUCTO_COMPLEJO ?? []).map((f) => [f.name, f.type]));
+const MEZCLAS_TYPE_MAP = Object.fromEntries((MASTER_SCHEMAS_META.MEZCLAS ?? []).map((f) => [f.name, f.type]));
 
 const ENR_FIXED_TYPES = {
   REFERENCIA_COMPLEJA: "string", MEZCLA: "string", EXTRUSORA: "string",
@@ -90,55 +91,221 @@ export function calcularFactibles({ enrutamientos, reglasFactibilidad, setupExtr
   return { factibles, log };
 }
 
-export function evaluarArbol(nodo, fila) {
+// ── Helpers de evaluación ─────────────────────────────────────────────────────
+
+function asBool(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? v !== 0 : null;
+  return Boolean(v);
+}
+
+// Evalúa un árbol de fórmula sobre una fila enriquecida.
+// ctx (opcional) habilita resolución de `referencia_calculo`:
+//   { calculosByNombre: Map, cache: Map, errors: array, missingReported: Set }
+export function evaluarArbol(nodo, fila, ctx = null) {
   if (!nodo) return null;
   if (nodo.tipo === "constante") return nodo.valor;
+  if (nodo.tipo === "nulo")      return null;
   if (nodo.tipo === "campo") {
-    const valor = fila[nodo.campo];
-    return valor !== undefined && valor !== null ? Number(valor) : null;
+    const valor = fila?.[nodo.campo];
+    if (valor === undefined || valor === null) return null;
+    if (typeof valor === "boolean") return valor;
+    const n = Number(valor);
+    return Number.isFinite(n) ? n : null;
   }
   if (nodo.tipo === "operacion") {
-    const izq = evaluarArbol(nodo.hijos?.[0] ?? null, fila);
-    const der = evaluarArbol(nodo.hijos?.[1] ?? null, fila);
+    const izq = evaluarArbol(nodo.hijos?.[0] ?? null, fila, ctx);
+    const der = evaluarArbol(nodo.hijos?.[1] ?? null, fila, ctx);
     if (izq === null || der === null) return null;
+    const a = Number(izq), b = Number(der);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
     switch (nodo.operador) {
-      case "+": return izq + der;
-      case "-": return izq - der;
-      case "*": return izq * der;
-      case "/": return der === 0 ? null : izq / der;
-      case "^": return Math.pow(izq, der);
+      case "+": return a + b;
+      case "-": return a - b;
+      case "*": return a * b;
+      case "/": return b === 0 ? null : a / b;
+      case "^": return Math.pow(a, b);
       default:  return null;
     }
+  }
+  if (nodo.tipo === "operacion_naria") {
+    const valores = (nodo.hijos ?? [])
+      .map((h) => evaluarArbol(h, fila, ctx))
+      .filter((v) => v !== null && v !== undefined);
+    if (valores.length === 0) return null;
+    const nums = valores.map(Number).filter((n) => Number.isFinite(n));
+    if (nums.length === 0) return null;
+    if (nodo.operador === "min") return Math.min(...nums);
+    if (nodo.operador === "max") return Math.max(...nums);
+    return null;
+  }
+  if (nodo.tipo === "si_aplica") {
+    const cond = asBool(evaluarArbol(nodo.condicion ?? null, fila, ctx));
+    if (cond === true) return evaluarArbol(nodo.valor ?? null, fila, ctx);
+    return null;
+  }
+  if (nodo.tipo === "booleana") {
+    const hijos = (nodo.hijos ?? []).map((h) => asBool(evaluarArbol(h, fila, ctx)));
+    if (nodo.operador === "not") {
+      const v = hijos[0];
+      return v === null || v === undefined ? null : !v;
+    }
+    if (nodo.operador === "and") {
+      if (hijos.length === 0) return null;
+      if (hijos.some((v) => v === false)) return false;
+      if (hijos.some((v) => v === null)) return null;
+      return true;
+    }
+    if (nodo.operador === "or") {
+      if (hijos.length === 0) return null;
+      if (hijos.some((v) => v === true)) return true;
+      if (hijos.every((v) => v === null)) return null;
+      return false;
+    }
+    return null;
+  }
+  if (nodo.tipo === "referencia_calculo") {
+    const id = nodo.calculo_id;
+    if (!id || !ctx?.calculosByNombre) return null;
+    if (ctx.cache && ctx.cache.has(id)) return ctx.cache.get(id);
+    const def = ctx.calculosByNombre.get(id);
+    if (!def) {
+      if (ctx.errors && ctx.missingReported && !ctx.missingReported.has(id)) {
+        ctx.errors.push({
+          tipo: "CALCULO_AUXILIAR_FALTANTE",
+          referencia: null, mezcla: null, extrusora: null,
+          descripcion: `Cálculo auxiliar "${id}" referenciado pero no definido`,
+          calculo_id: id,
+        });
+        ctx.missingReported.add(id);
+      }
+      if (ctx.cache) ctx.cache.set(id, null);
+      return null;
+    }
+    const result = evaluarArbol(def.arbol, fila, ctx);
+    if (ctx.cache) ctx.cache.set(id, result);
+    return result;
   }
   return null;
 }
 
-export function camposDeArbol(nodo) {
+// Recolecta los campos {fuente, campo} usados por el árbol. Si se pasa
+// `todasLasDefiniciones`, sigue transitivamente los nodos referencia_calculo.
+export function camposDeArbol(nodo, todasLasDefiniciones = [], visited = new Set()) {
   if (!nodo) return [];
   if (nodo.tipo === "campo")     return [{ fuente: nodo.fuente, campo: nodo.campo }];
-  if (nodo.tipo === "constante") return [];
+  if (nodo.tipo === "constante" || nodo.tipo === "nulo") return [];
   if (nodo.tipo === "operacion") {
     return [
-      ...camposDeArbol(nodo.hijos?.[0] ?? null),
-      ...camposDeArbol(nodo.hijos?.[1] ?? null),
+      ...camposDeArbol(nodo.hijos?.[0] ?? null, todasLasDefiniciones, visited),
+      ...camposDeArbol(nodo.hijos?.[1] ?? null, todasLasDefiniciones, visited),
     ];
+  }
+  if (nodo.tipo === "operacion_naria" || nodo.tipo === "booleana") {
+    return (nodo.hijos ?? []).flatMap((h) => camposDeArbol(h, todasLasDefiniciones, visited));
+  }
+  if (nodo.tipo === "si_aplica") {
+    return [
+      ...camposDeArbol(nodo.condicion ?? null, todasLasDefiniciones, visited),
+      ...camposDeArbol(nodo.valor ?? null, todasLasDefiniciones, visited),
+    ];
+  }
+  if (nodo.tipo === "referencia_calculo") {
+    const id = nodo.calculo_id;
+    if (!id || visited.has(id)) return [];
+    const def = (todasLasDefiniciones ?? []).find((d) => d.nombre === id);
+    if (!def) return [];
+    return camposDeArbol(def.arbol, todasLasDefiniciones, new Set([...visited, id]));
   }
   return [];
 }
 
-export function calcularEnrutamientos({ productoComplejo, producto, enrutamientoMezclas, setupExtrusoras, calculos }) {
+// Devuelve el set de nombres de cálculos referenciados (no transitivos) por el árbol.
+function referenciasDelArbol(nodo, acc = new Set()) {
+  if (!nodo) return acc;
+  if (nodo.tipo === "referencia_calculo") {
+    if (nodo.calculo_id) acc.add(nodo.calculo_id);
+    return acc;
+  }
+  if (Array.isArray(nodo.hijos)) for (const h of nodo.hijos) referenciasDelArbol(h, acc);
+  if (nodo.condicion) referenciasDelArbol(nodo.condicion, acc);
+  if (nodo.valor && typeof nodo.valor === "object") referenciasDelArbol(nodo.valor, acc);
+  return acc;
+}
+
+// Orden topológico de cálculos por dependencia (las referenciadas antes que las que las referencian).
+// Devuelve { orden: array | null, ciclos: array<array<string>> }.
+export function ordenarCalculosPorDependencia(definiciones) {
+  const byNombre = new Map();
+  for (const def of definiciones ?? []) if (def?.nombre) byNombre.set(def.nombre, def);
+
+  const visited = new Set();
+  const onStack = new Set();
+  const order   = [];
+  const ciclos  = [];
+
+  function dfs(nombre, path) {
+    if (onStack.has(nombre)) {
+      const i = path.indexOf(nombre);
+      ciclos.push(path.slice(i).concat(nombre));
+      return;
+    }
+    if (visited.has(nombre)) return;
+    onStack.add(nombre);
+    path.push(nombre);
+    const def = byNombre.get(nombre);
+    if (def) {
+      for (const dep of referenciasDelArbol(def.arbol)) {
+        if (byNombre.has(dep)) dfs(dep, path);
+      }
+    }
+    path.pop();
+    onStack.delete(nombre);
+    visited.add(nombre);
+    order.push(nombre);
+  }
+
+  for (const nombre of byNombre.keys()) dfs(nombre, []);
+
+  if (ciclos.length > 0) return { orden: null, ciclos };
+  return { orden: order.map((n) => byNombre.get(n)), ciclos: [] };
+}
+
+export function calcularEnrutamientos({ productoComplejo, producto, enrutamientoMezclas, setupExtrusoras, mezclas, calculos }) {
   const rows   = [];
   const errors = [];
 
-  // Extraer campos requeridos por los árboles RS y RENDIMIENTO (deduplicados)
+  const calculosByNombre = new Map();
+  for (const def of (calculos ?? [])) {
+    if (def?.nombre) calculosByNombre.set(def.nombre, def);
+  }
+
+  // Detectar ciclos antes de evaluar — si los hay, abortamos sin calcular.
+  const { ciclos } = ordenarCalculosPorDependencia(calculos ?? []);
+  if (ciclos.length > 0) {
+    for (const c of ciclos) {
+      errors.push({
+        tipo: "CICLO_EN_CALCULOS",
+        referencia: null, mezcla: null, extrusora: null,
+        descripcion: `Ciclo detectado entre cálculos: ${c.join(" → ")}`,
+      });
+    }
+    return { rows, errors };
+  }
+
+  // Extraer campos requeridos por los árboles RS y RENDIMIENTO (deduplicados,
+  // siguiendo transitivamente las referencias a otros cálculos)
   const defRS          = (calculos ?? []).find((d) => d.nombre === "RS");
   const defRENDIMIENTO = (calculos ?? []).find((d) => d.nombre === "RENDIMIENTO");
-  const camposPC = new Set();
-  const camposSE = new Set();
+  const camposPC      = new Set();
+  const camposSE      = new Set();
+  const camposMezclas = new Set();
   for (const def of [defRS, defRENDIMIENTO].filter(Boolean)) {
-    for (const { fuente, campo } of camposDeArbol(def.arbol)) {
+    for (const { fuente, campo } of camposDeArbol(def.arbol, calculos ?? [])) {
       if (fuente === "PRODUCTO_COMPLEJO") camposPC.add(campo);
       if (fuente === "SETUP_EXTRUSORAS")  camposSE.add(campo);
+      if (fuente === "MEZCLAS")           camposMezclas.add(campo);
     }
   }
 
@@ -160,6 +327,14 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
     seMap.get(key).push(se);
   }
 
+  const mezclasMap = new Map();
+  for (const m of (mezclas ?? [])) {
+    mezclasMap.set(norm(m.MEZCLA), m);
+  }
+
+  const missingMezclasReported = new Set();
+  const missingCalcReported    = new Set();
+
   for (const pc of productoComplejo) {
     const ref    = norm(pc.REFERENCIA);
     const mezcla = productoMap.get(ref) ?? "";
@@ -167,6 +342,16 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
     if (!mezcla) {
       errors.push({ tipo: "MEZCLA_NO_RESUELTA", referencia: pc.REFERENCIA, mezcla: "", extrusora: "", descripcion: "No encontrada en PRODUCTO o sin MEZCLA" });
       continue;
+    }
+
+    const mezclaProps = mezclasMap.get(mezcla) ?? null;
+    if (!mezclaProps && camposMezclas.size > 0 && !missingMezclasReported.has(mezcla)) {
+      errors.push({
+        tipo: "MEZCLA_SIN_PROPIEDADES",
+        referencia: pc.REFERENCIA, mezcla, extrusora: "",
+        descripcion: `MEZCLA ${mezcla} sin entrada en maestro MEZCLAS — campos requeridos por la fórmula serán null`,
+      });
+      missingMezclasReported.add(mezcla);
     }
 
     const emRows = emMap.get(mezcla) ?? [];
@@ -199,14 +384,28 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
         for (const c of camposPC) row[c] = pc[c] ?? null;
         row.ES_ACTUAL = se.ES_ACTUAL ?? null;
         for (const c of camposSE) row[c] = se[c] ?? null;
+        for (const c of camposMezclas) {
+          // MEZCLA ya está en row; no la sobreescribimos
+          if (c === "MEZCLA") continue;
+          row[c] = mezclaProps?.[c] ?? null;
+        }
 
-        const rs          = defRS          ? evaluarArbol(defRS.arbol,          row) : null;
-        const rendimiento = defRENDIMIENTO ? evaluarArbol(defRENDIMIENTO.arbol, row) : null;
+        const ctx = {
+          calculosByNombre,
+          cache:            new Map(),
+          errors,
+          missingReported:  missingCalcReported,
+        };
+
+        const rs          = defRS          ? evaluarArbol(defRS.arbol,          row, ctx) : null;
+        const rendimiento = defRENDIMIENTO ? evaluarArbol(defRENDIMIENTO.arbol, row, ctx) : null;
 
         // Campos de fórmula que entran en RS/RENDIMIENTO — se incluyen en el error
         // para que el viewer los muestre dinámicamente según la fórmula activa
         const formulaFields = Object.fromEntries(
-          [...camposPC, ...camposSE].map((c) => [c, row[c] ?? null])
+          [...camposPC, ...camposSE, ...camposMezclas]
+            .filter((c) => c !== "MEZCLA")
+            .map((c) => [c, row[c] ?? null])
         );
 
         if (rs === null) {

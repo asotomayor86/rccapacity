@@ -6,12 +6,17 @@ import {
   verificarRefsDemandaNoEnProducto,
   verificarRefsSinMezcla,
   verificarMezclaSinEnrutamiento,
+  verificarMezclasSinFicha,
 } from "../services/verificaciones";
 
 const SCHEMA_REF = [{ name: "REFERENCIA", type: "string" }];
 const SCHEMA_REF_MEZCLA = [
   { name: "REFERENCIA", type: "string" },
   { name: "MEZCLA",     type: "string" },
+];
+const SCHEMA_MEZCLA_COUNT = [
+  { name: "MEZCLA",                  type: "string" },
+  { name: "n_REFERENCIAS_AFECTADAS", type: "decimal", label: "REFERENCIAS AFECTADAS" },
 ];
 
 // null = sin calcular | [] = OK (0 alertas) | [...] = alertas
@@ -109,6 +114,14 @@ const VIEWER_CONFIG = {
   V1: { masterName: "REFS EN DEMANDA SIN PRODUCTO",  schema: SCHEMA_REF },
   V2: { masterName: "REFS CON DEMANDA SIN MEZCLA EN PRODUCTO", schema: SCHEMA_REF },
   V3: { masterName: "REFS CON DEMANDA SIN ASIGNACIÓN MO>EX", schema: SCHEMA_REF_MEZCLA },
+  V4: { masterName: "MEZCLAS SIN FICHA EN MAESTRO MEZCLAS",   schema: SCHEMA_MEZCLA_COUNT },
+};
+
+const STORE_KEY_BY_VIEW = {
+  V1: "REFS_SIN_PRODUCTO",
+  V2: "REFS_SIN_MEZCLA",
+  V3: "REFS_SIN_ENRUTAMIENTO",
+  V4: "MEZCLAS_SIN_FICHA",
 };
 
 export default function VerificacionesPage() {
@@ -117,18 +130,21 @@ export default function VerificacionesPage() {
   const demanda      = useStore((s) => s.masters.DEMANDA?.records              ?? []);
   const producto     = useStore((s) => s.masters.PRODUCTO?.records             ?? []);
   const enrutamiento = useStore((s) => s.masters.ENRUTAMIENTO_MEZCLAS?.records ?? []);
+  const mezclas      = useStore((s) => s.masters.MEZCLAS?.records              ?? []);
   const verificaciones  = useStore((s) => s.verificaciones);
   const setVerificacion = useStore((s) => s.setVerificacion);
 
-  const [viewing, setViewing] = useState(null); // "V1" | "V2" | "V3" | null
+  const [viewing, setViewing] = useState(null); // "V1" | "V2" | "V3" | "V4" | null
 
   const demandaLoaded  = demanda.length > 0;
   const productoLoaded = producto.length > 0;
   const enrutLoaded    = enrutamiento.length > 0;
+  const mezclasLoaded  = mezclas.length > 0;
 
   const v1 = verificaciones.REFS_SIN_PRODUCTO;
   const v2 = verificaciones.REFS_SIN_MEZCLA;
   const v3 = verificaciones.REFS_SIN_ENRUTAMIENTO;
+  const v4 = verificaciones.MEZCLAS_SIN_FICHA;
 
   function calcV1() {
     const r = verificarRefsDemandaNoEnProducto(demanda, producto);
@@ -157,6 +173,16 @@ export default function VerificacionesPage() {
       r.length > 0
         ? `${r.length} referencia(s) cuya mezcla no tiene cobertura en Enrutamiento Mezclas.`
         : "Todas las mezclas tienen cobertura en Enrutamiento Mezclas."
+    );
+  }
+
+  function calcV4() {
+    const r = verificarMezclasSinFicha(demanda, producto, mezclas);
+    setVerificacion("MEZCLAS_SIN_FICHA", r);
+    toast[r.length > 0 ? "warning" : "success"](
+      r.length > 0
+        ? `${r.length} mezcla(s) sin ficha en maestro MEZCLAS.`
+        : "Todas las mezclas con demanda tienen ficha en MEZCLAS."
     );
   }
 
@@ -207,13 +233,26 @@ export default function VerificacionesPage() {
             onCalcular={calcV3}
             onVisualizar={() => setViewing("V3")}
           />
+
+          <VerifCard
+            title="V4 · MEZCLAS SIN FICHA EN MAESTRO MEZCLAS"
+            desc="Mezclas con demanda que no tienen ficha en MEZCLAS (necesario para el modelo de cuellos)"
+            requiredMasters={[
+              { name: "DEMANDA",  loaded: demandaLoaded  },
+              { name: "PRODUCTO", loaded: productoLoaded },
+              { name: "MEZCLAS",  loaded: mezclasLoaded  },
+            ]}
+            result={v4}
+            onCalcular={calcV4}
+            onVisualizar={() => setViewing("V4")}
+          />
         </div>
       </div>
 
       {viewing && (
         <MasterViewer
           masterName={VIEWER_CONFIG[viewing].masterName}
-          records={verificaciones[viewing === "V1" ? "REFS_SIN_PRODUCTO" : viewing === "V2" ? "REFS_SIN_MEZCLA" : "REFS_SIN_ENRUTAMIENTO"] ?? []}
+          records={verificaciones[STORE_KEY_BY_VIEW[viewing]] ?? []}
           schema={VIEWER_CONFIG[viewing].schema}
           onClose={() => setViewing(null)}
         />

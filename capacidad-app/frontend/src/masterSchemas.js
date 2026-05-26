@@ -76,5 +76,20 @@ export const MASTER_SCHEMAS_META = {
     { name: "FUELLE_MAXIMO",         type: "decimal", required: false, label: "FUELLE MAXIMO",        positive: true },
     { name: "TRATADOR_CORONA",       type: "boolean", required: false, label: "TRATADOR CORONA"       },
     { name: "CORTE_LAMINA",          type: "boolean", required: false, label: "CORTE LAMINA"          },
+    // ── PARÁMETROS DE RENDIMIENTO (modelo de cuellos de botella) ─────────────
+    { name: "D_DIE",                 type: "decimal", required: false, label: "D DIE (MM)",            positive: true },
+    { name: "COOLING_FACTOR",        type: "decimal", required: false, label: "COOLING FACTOR",        positive: true },
+    { name: "CORONA_KW",             type: "decimal", required: false, label: "CORONA KW"                              },
+    { name: "V_MAX_SOLDADOR",        type: "decimal", required: false, label: "V MAX SOLDADOR (M/MIN)", positive: true },
+    { name: "V_MAX_ABREFACIL",       type: "decimal", required: false, label: "V MAX ABREFÁCIL (M/MIN)", positive: true },
+  ],
+
+  MEZCLAS: [
+    { name: "MEZCLA",            type: "string",  required: true,  label: "MEZCLA"             },
+    { name: "RESINA_DOMINANTE",  type: "string",  required: false, label: "RESINA DOMINANTE"   },
+    { name: "PCT_PCR",           type: "decimal", required: false, label: "%PCR"               },
+    { name: "K_HUSILLO",         type: "decimal", required: false, label: "K HUSILLO",         positive: true },
+    { name: "DSO_EF",            type: "decimal", required: false, label: "DSO EF (KG/H·MM)",  positive: true },
+    { name: "RHO_FILM",          type: "decimal", required: false, label: "ρ FILM (KG/M³)",    positive: true },
   ],
 };

@@ -69,6 +69,34 @@
   - Estado en Zustand: `escenario0` + acción `setEscenario0`.
   - Servicio independiente: `escenario0.js`.
 
+### Sprint 13 — Operadores avanzados en árboles (Sprint A del modelo de cuellos) (2026-05-23)
+- **Nuevos tipos de nodo** en `NodoFormula` (engine.js): `operacion_naria` (min/max n-arios), `nulo`, `si_aplica` (condición boolean → valor o null), `booleana` (and/or/not), `referencia_calculo` (resolución a otro cálculo por NOMBRE).
+- **evaluarArbol** ampliado:
+  - `min`/`max` ignoran hijos null; todos null → null.
+  - Aritmética propaga null (`2 + null = null`, `0 × null = null`).
+  - `si_aplica(false|null, v) = null`; `si_aplica(true, v) = evaluar(v)`.
+  - `and`/`or` con corto-circuito; `not` propaga null.
+  - `referencia_calculo` resuelve por NOMBRE, cachea resultados por fila vía `ctx`.
+- **ordenarCalculosPorDependencia** con detección de ciclos vía DFS. Si hay ciclo → error `CICLO_EN_CALCULOS` antes de evaluar.
+- **camposDeArbol** sigue transitivamente referencias y maneja todos los nuevos tipos. Recibe la lista completa de definiciones para resolución cruzada.
+- **UI del constructor** en `CalculosPage`: nuevos botones (Min, Max, Nulo, Si aplica, Booleano, Cálculo) en slot vacío; `NodoOperacionNaria` con "+ añadir hijo"; `NodoSiAplica` con slot condición/valor y validación visual roja si la condición no termina en boolean; `NodoBooleana` con selector AND/OR/NOT (NOT colapsa a un único operando); `NodoReferenciaCalculo` con desplegable filtrado y badge rojo si la referencia no existe. Colores: azul (operación n-aria), gris (nulo), naranja (si_aplica), púrpura (booleana), azul claro (referencia).
+- **Enum NOMBRE** ampliado: `{ RS | RENDIMIENTO | Q_HUSILLO | Q_DSO | Q_LINEA | Q_POST | Q_POST_CORONA | Q_POST_SOLDADOR | Q_POST_ABREFACIL | AUX_1 | AUX_2 | AUX_3 }`. Solo RS y RENDIMIENTO siguen siendo prerequisito de cálculo.
+- **Compatibilidad hacia atrás**: cálculos previos con sólo `+ − × ÷ ^`, sin referencias y sin MEZCLAS siguen funcionando sin cambios.
+
+### Sprint 14 — Maestro MEZCLAS y parámetros de rendimiento (Sprint B del modelo de cuellos) (2026-05-23)
+- **Nuevo maestro MEZCLAS** (schema en `masterSchemas.js`): MEZCLA · RESINA_DOMINANTE · PCT_PCR · K_HUSILLO · DSO_EF · RHO_FILM. Registrado en `state.MASTER_NAMES`; tarjeta dedicada en MaestrosPage (no incluido en CORE_MASTERS porque es opcional); opción en CargadorPage para importación asistida/automática; cruza con `PRODUCTO.MEZCLA`.
+- **Ampliación de SETUP_EXTRUSORAS** con cinco campos para el modelo de cuellos: D_DIE (mm), COOLING_FACTOR (factor sobre baseline single-lip), CORONA_KW (potencia tratador), V_MAX_SOLDADOR (m/min), V_MAX_ABREFACIL (m/min). Nueva sección "Parámetros de rendimiento" en el modal de SetupExtrusorasPage. Export CSV (`SETUP_EXTRUSORAS_COLS`) actualizado para incluirlos.
+- **MEZCLAS como cuarta fuente** en el constructor de árboles: el `InputSelector` ahora muestra tres columnas (PC, SE, MEZCLAS) y permite campos `MEZCLAS.K_HUSILLO`, `.DSO_EF`, `.RHO_FILM`, `.PCT_PCR` (MEZCLA y RESINA_DOMINANTE son string, excluidos del dropdown numérico).
+- **engine.calcularEnrutamientos** acepta `mezclas` como nuevo parámetro. Resuelve por fila `PRODUCTO_COMPLEJO.REFERENCIA → PRODUCTO.MEZCLA → MEZCLAS[MEZCLA]` y rellena la fila con los campos requeridos. Si una mezcla con demanda no está en el maestro y el árbol activo usa campos de MEZCLAS → error `MEZCLA_SIN_PROPIEDADES`. Schema dinámico de ENRUTAMIENTOS (`enrutamientosSchema.schemaDeDefiniciones`) incluye columnas MZ_* cuando los árboles las usan.
+- **V4 · MEZCLAS SIN FICHA EN MAESTRO MEZCLAS** (`MEZCLAS_SIN_FICHA`): nueva verificación en `verificaciones.js` con granularidad por MEZCLA única (columnas MEZCLA · n_REFERENCIAS_AFECTADAS). Tarjeta en VerificacionesPage con mismo diseño que V1-V3. Key añadida al store.
+
+### Sprint 15 — Definiciones por defecto del modelo de cuellos (Sprint C) (2026-05-23)
+- **`services/modeloCuellos.js`** con el modelo embebido en código (helpers `mul/div/cte/pc/se/mz/ref/minN/siAplica/or` para construir árboles legibles). Definiciones: Q_HUSILLO, Q_DSO, Q_LINEA, Q_POST_CORONA, Q_POST_SOLDADOR, Q_POST_ABREFACIL, Q_POST y RENDIMIENTO (8 cálculos; RS queda fuera porque la plantilla no toca su definición existente).
+- **Botón "CARGAR MODELO POR DEFECTO"** en cabecera de CalculosPage. Modal de confirmación que enumera los cálculos a añadir y marca explícitamente cuáles serán reemplazados si ya existen con el mismo NOMBRE. Upsert por NOMBRE preservando el `id` interno del cálculo existente.
+- **Botón "i" informativo** junto al botón anterior. Abre modal con: lista de variables requeridas agrupadas por maestro, advertencia sobre prerequisitos, tabla de rangos típicos (K_HUSILLO ∈ [0,75 ; 1,00]; DSO_EF ∈ [0,07 ; 0,30] kg/h·mm; RHO_FILM ∈ [918 ; 955] kg/m³; COOLING_FACTOR ∈ [1,0 ; 2,0]).
+- **Plantilla CSV física** en `frontend/public/plantillas/CALCULOS_MODELO_CUELLOS.csv` con la serialización JSON de los 8 árboles. Generada por `scripts/gen_plantilla_modelo_cuellos.mjs` (regenerable). Cargable también vía el botón existente "⬆ Importar" — el handler hace upsert por NOMBRE.
+- **CALCULO_AUXILIAR_FALTANTE**: cuando un nodo `referencia_calculo` apunta a un NOMBRE sin definir, el motor emite un error tipo `CALCULO_AUXILIAR_FALTANTE` (deduplicado por id) y el referencia devuelve null; el cálculo padre sigue evaluándose con los Q_* disponibles.
+
 ---
 
 ## Pendiente
@@ -87,3 +115,9 @@
 - Persistencia local (localStorage o IndexedDB)
 - Autenticación básica
 - Más verificaciones: referencias sin CALENDARIO, extrusoras sin cobertura RS
+- **Coextrusión multicapa** (extensión del modelo de cuellos):
+  - Nuevo maestro `RECETAS_COEX` con campos por capa: `RECETA_ID`, `NUMERO_CAPA`, `MEZCLA_CAPA`, `PCT_CAPA`, `EXTRUSORA_ASIGNADA`.
+  - PRODUCTO con campo opcional para enlazar a una receta de coex.
+  - Motor de ENRUTAMIENTOS calcula `Q_HUSILLO` por capa y aplica `Q_HUSILLO_COEX = min_i (Q_HUSILLO_i / PCT_CAPA_i)`.
+  - Los demás cuellos (Q_DSO, Q_LINEA, Q_POST) se calculan a nivel de línea común una sola vez.
+  - Requiere ampliar el motor para iterar por extrusoras de la línea, agruparlas por RECETA y resolver MEZCLA por capa.

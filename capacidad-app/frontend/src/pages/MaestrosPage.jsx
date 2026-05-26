@@ -27,9 +27,17 @@ const MASTER_INFO = {
     desc: "Horas disponibles por CM y mes",
     fields: ["MES", "CM", "CT", "HORAS TOTALES", "%EFICIENCIA", "HORAS EFICIENTES"],
   },
+  MEZCLAS: {
+    label: "Mezclas",
+    desc: "Propiedades de cada mezcla para el modelo de rendimiento por cuellos",
+    fields: ["MEZCLA", "RESINA DOMINANTE", "%PCR", "K HUSILLO", "DSO EF (KG/H·MM)", "ρ FILM (KG/M³)"],
+    optional: true,
+  },
 };
 
-const CORE_MASTERS = Object.keys(MASTER_INFO);
+// Los 4 maestros requeridos para el motor de cálculo (MEZCLAS es opcional, solo
+// necesario si las fórmulas usan el modelo de cuellos).
+const CORE_MASTERS = ["DEMANDA", "PRODUCTO", "ENRUTAMIENTO_MEZCLAS", "CALENDARIO"];
 
 function fmtDate(iso) {
   if (!iso) return null;

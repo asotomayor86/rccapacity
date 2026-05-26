@@ -55,3 +55,34 @@ export function verificarMezclaSinEnrutamiento(demandaRecords, productoRecords, 
   }
   return result;
 }
+
+// Verificación 4: Referencias con demanda cuya mezcla no tiene ficha en el maestro MEZCLAS
+// (necesario para el modelo de rendimiento por cuellos de botella).
+// Granularidad: por MEZCLA única. Devuelve { MEZCLA, n_REFERENCIAS_AFECTADAS }.
+export function verificarMezclasSinFicha(demandaRecords, productoRecords, mezclasRecords) {
+  const refsDemanda = new Set(
+    demandaRecords.map((r) => String(r.REFERENCIA ?? "").trim()).filter(Boolean)
+  );
+  const productoMap = new Map(
+    productoRecords.map((r) => [String(r.REFERENCIA ?? "").trim(), r])
+  );
+  const mezclasConFicha = new Set(
+    (mezclasRecords ?? []).map((r) => String(r.MEZCLA ?? "").trim()).filter(Boolean)
+  );
+
+  // Cuenta referencias afectadas por cada mezcla sin ficha
+  const counts = new Map();
+  for (const ref of refsDemanda) {
+    const prod = productoMap.get(ref);
+    if (!prod) continue;
+    const mezcla = String(prod.MEZCLA ?? "").trim();
+    if (!mezcla) continue;
+    if (mezclasConFicha.has(mezcla)) continue;
+    counts.set(mezcla, (counts.get(mezcla) ?? 0) + 1);
+  }
+
+  return [...counts.entries()].map(([mezcla, n]) => ({
+    MEZCLA: mezcla,
+    n_REFERENCIAS_AFECTADAS: n,
+  }));
+}
