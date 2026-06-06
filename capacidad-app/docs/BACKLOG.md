@@ -97,9 +97,78 @@
 - **Plantilla CSV física** en `frontend/public/plantillas/CALCULOS_MODELO_CUELLOS.csv` con la serialización JSON de los 8 árboles. Generada por `scripts/gen_plantilla_modelo_cuellos.mjs` (regenerable). Cargable también vía el botón existente "⬆ Importar" — el handler hace upsert por NOMBRE.
 - **CALCULO_AUXILIAR_FALTANTE**: cuando un nodo `referencia_calculo` apunta a un NOMBRE sin definir, el motor emite un error tipo `CALCULO_AUXILIAR_FALTANTE` (deduplicado por id) y el referencia devuelve null; el cálculo padre sigue evaluándose con los Q_* disponibles.
 
+### Sprint 17 — Wrap controlado en el constructor de fórmulas (2026-06-01)
+- **Enfoque C** (mejorar el wrap). Solo se reordenan nodos `operacion` existentes; sin tipos de nodo nuevos. Único fichero tocado: `src/pages/CalculosPage.jsx`. Motor, `formulaTexto`, export/import CSV y `modeloCuellos.js` intactos; compatibilidad total con cálculos guardados.
+- **`WrapButton` reutilizable**: el botón `( )` abre un popover inline con selector de operador (`+ − × ÷ ^`) y toggle de lado (`x∘▢` / `▢∘x`). Al confirmar crea `{ tipo: "operacion", operador, hijos: side === "left" ? [nodo, null] : [null, nodo] }`. Sustituye al antiguo wrap fijo (`*`, siempre a la izquierda).
+- **Wrap universal**: `WrapButton` añadido a **todos** los nodos —hojas (`campo`, `constante`, `nulo`, `referencia_calculo`) vía el componente compartido `NodoActions`, y compuestos (`operacion`, `operacion_naria`, `si_aplica`, `booleana`) en su cabecera. Ahora se puede envolver cualquier subárbol y la **raíz**, permitiendo que la fórmula crezca hacia afuera.
+- **Desenvolver (unwrap)**: en `NodoOperacion`, acciones **"⤺ izq"** / **"der ⤻"** que reemplazan el nodo por uno de sus hijos (`onReplace(nodo.hijos?.[lado] ?? null)`), deshabilitadas cuando ese hijo es null. Inverso exacto del wrap: quita un nivel de paréntesis en cualquier punto.
+- **Refactor**: los tres bloques duplicados `( )` + `✕` de las hojas unificados en `NodoActions`.
+- **Fuera de alcance** (enfoques A/B no elegidos): preview sin paréntesis redundantes en `formulaTexto`; suma/producto n-ario. La Fase 3 (agrupar selección en nodos n-arios) queda pendiente para una iteración futura.
+
+### Sprint 18 — Constructor lineal de fórmulas (reemplaza el árbol) (2026-06-01)
+- **Cambio de paradigma**: el constructor visual de árbol se sustituye por un **constructor lineal de fichas** (tokens) que se construye de izquierda a derecha: `(` · `)` · operador (`+ − × ÷ ^`) · **+ Campo** · **+ Constante** · **+ Cálculo** (referencia). Más sencillo y con control literal de los paréntesis. Reemplaza por completo el Sprint 17 (wrap) y todos los componentes `Nodo*`/`WrapButton`/`InputSelector`.
+- **Compilación tokens → AST** (`compilarTokens`, shunting-yard con validación de estado): la secuencia infija se compila a la **misma AST existente** (`operacion`/`campo`/`constante`/`referencia_calculo`) con **precedencia matemática estándar** (`^` > `× ÷` > `+ −`, `^` derecha-asociativo) respetando los paréntesis explícitos. El motor (`evaluarArbol`), export/import CSV y `modeloCuellos.js` **no cambian**: el `arbol` sigue siendo la fuente de verdad. Validación en vivo con mensajes legibles; "Guardar" deshabilitado si la expresión no es válida.
+- **Persistencia**: la definición guarda además `tokens` (ayuda de edición); `arbol` se recompila desde los tokens en cada guardado. El export CSV sigue serializando solo `ARBOL_JSON` (sin cambios de formato).
+- **Round-trip de definiciones antiguas/importadas** (`linearizar`): si una definición solo tiene `arbol` (cargada por "Cargar modelo" o importada por CSV), se intenta convertir a tokens. Si es aritmética pura → editable; si usa nodos avanzados (min/max, si_aplica, booleana) → se muestra en **solo lectura** con aviso, y un botón "Reconstruir con el constructor lineal" permite empezar de cero.
+- **`formulaTexto` precedencia-aware**: el preview ahora muestra **paréntesis mínimos** (antes envolvía cada operación binaria). Mantiene el render de los nodos avanzados para el modo solo-lectura.
+- **Simplificación**: eliminado el paso de seleccionar "inputs" (el selector de campos ofrece directamente todos los campos de PRODUCTO_COMPLEJO / SETUP_EXTRUSORAS / MEZCLAS; el motor ya deriva los campos del árbol, no de `inputs`). La definición conserva `inputs: []` por compatibilidad.
+- **Limitación aceptada**: el constructor lineal no expresa min/max, si_aplica ni and/or/not; esas fórmulas (modelo de cuellos) se cargan con "Cargar modelo por defecto" pero no se editan desde la UI. Único fichero modificado: `src/pages/CalculosPage.jsx`.
+
+### Sprint 19 — MIN(), nombres libres y simplificación de maestros (2026-06-06)
+
+Versión previa al inicio de despliegues a usuarios. Cambia la forma de calcular rendimientos: se retira el modelo de cuellos embebido y el usuario construye RENDIMIENTO a su manera con `MIN()`.
+
+**Herramienta de cálculos:**
+- **Operador `MIN()`** (n-ario) en el constructor lineal: botones **MIN(** y **`,`**. El parser pasa de shunting-yard a **descenso recursivo** (`expr/term/factor/base`) para soportar funciones; `MIN(a, b, …)` compila a `operacion_naria` (operador `min`, ≥2 args), que el motor ya evalúa como mínimo ignorando nulos. `linearizar` convierte min/max a tokens (round-trip). `tokensTexto` y `Chip` muestran `min(` y `,` con color teal. Validación: mín. 2 argumentos, paréntesis de función balanceados.
+- **Nombres editables**: el desplegable de NOMBRE pasa de enum cerrado a **RS · RENDIMIENTO · OTRO (personalizado)**. RS y RENDIMIENTO siguen siendo fijos (viajan a las intermedias, los localiza el motor por nombre exacto). Con OTRO se escribe nombre libre (cálculo intermedio), con validación: no vacío, no chocar con RS/RENDIMIENTO ni con otro cálculo existente.
+
+**Maestros:**
+- **MEZCLAS reducido a solo `MEZCLA`** (schema en `masterSchemas.js`). Se deja casi deshabilitado, previsto para reactivar cuando haya cálculos basados en mezcla. El motor sigue aceptando `mezclas` pero queda inerte (ningún cálculo usa campos MZ). Verificación **V4 (MEZCLAS SIN FICHA) se mantiene** (solo necesita la columna MEZCLA). Actualizada la tarjeta de MaestrosPage.
+- **SETUP_EXTRUSORAS restaurado** a las columnas operativas (las del CSV histórico), quitando los 5 parámetros de rendimiento (`D_DIE`, `COOLING_FACTOR`, `CORONA_KW`, `V_MAX_SOLDADOR`, `V_MAX_ABREFACIL`) del schema, del export (`SETUP_EXTRUSORAS_COLS`), de la sección "Parámetros de rendimiento" del modal (`SetupExtrusorasPage`) y del selector de campos del constructor.
+- **Nuevo campo `CTE_DADO`** (decimal, "Cte. dado") en SETUP_EXTRUSORAS: schema, export, modal (sección "Capacidades", junto a Hilera) y selector de campos del constructor. Constante por extrusora disponible para las fórmulas de rendimiento.
+
+**Retirada del modelo de cuellos de botella** (decisión: eliminarlo por completo):
+- Borrados `services/modeloCuellos.js` y `pages/ayuda/contenido/rendimiento.md`.
+- `CalculosPage`: fuera el botón "Cargar modelo por defecto", el botón "i", ambos modales (`ConfirmModeloModal`, `ModeloInfoModal`) y el estado/handlers asociados.
+- `AyudaPage`: retirada la sección "Cálculo de rendimiento".
+- `mdRenderer`: eliminados los bloques y marcadores `{{MODELO_CUELLOS_*}}`.
+
+**Limpieza**: eliminados también los huérfanos `public/plantillas/CALCULOS_MODELO_CUELLOS.csv` y `scripts/gen_plantilla_modelo_cuellos.mjs`.
+
 ---
 
 ## Pendiente
+
+### Sprint 16 — Panel de ayuda contextual (v1)
+
+Primer corte del panel lateral de ayuda. Tres secciones iniciales: **Flujo de trabajo**, **Maestros**, **Cálculo de rendimiento**.
+
+**Decisiones de diseño tomadas:**
+- **Disparador**: nueva entrada `AYUDA` en `NAV_ITEMS` (`App.jsx`). El handler NO navega a una ruta — abre un drawer overlay. Estado controlado en `AppInner` (`useState ayudaAbierta`).
+- **Layout del drawer**: panel derecho overlay sobre `.main-content` (no afecta a `StatusBar`). Ancho fijo ~420px en desktop, full-width en móvil. Las 3 secciones se presentan en **acordeón apilado**: cabecera siempre visible, contenido colapsable. Solo una abierta a la vez (acordeón exclusivo) con la primera expandida por defecto. Cerrable con: botón ✕, tecla Esc, click en backdrop.
+- **Contenido**: tres ficheros Markdown en `src/pages/ayuda/contenido/` (`flujo.md`, `maestros.md`, `rendimiento.md`), importados como strings vía `?raw` de Vite. Parseo con **mini-renderer propio** (sin librerías externas, alineado con `standard_layout.md`): subset reducido — `#`/`##`/`###`, `**negrita**`, `*cursiva*`, `` `código` ``, listas `-`/`1.`, tablas pipe `| a | b |`, citas `>`, separador `---`, párrafos. Implementado en `src/pages/ayuda/mdRenderer.jsx` (~150 líneas).
+- **Tono**: mixto — operativo por defecto (1-3 frases por bloque) + secciones expandibles `Ver más` (sintaxis markdown propia: `<!-- detalles -->` … `<!-- /detalles -->`, gestionado por el mini-renderer como bloque colapsable inline).
+- **Sin duplicación con el código**: el contenido textual vive en MD, pero las listas de columnas de maestros y la tabla de rangos del modelo de cuellos se inyectan dinámicamente. El renderer interpreta marcadores especiales `{{MAESTRO:DEMANDA}}`, `{{MAESTRO:PRODUCTO}}`, etc., y `{{MODELO_CUELLOS_RANGOS}}`, `{{MODELO_CUELLOS_REQUIERE}}` resolviéndolos contra `MASTER_SCHEMAS_META` y `modeloCuellos.js`. Así si se añade una columna a un maestro o un rango al modelo, la ayuda se actualiza sola.
+
+**Contenido de cada sección (alcance v1):**
+- **Flujo de trabajo**: orden canónico Maestros → Verificaciones → Reglas → Intermedias (PC) → Cálculos → Intermedias calculadas (ENRUTAMIENTOS) → Setup extrusoras → Resultados (Escenario 0). Mini-stepper visual + qué hace cada paso + dependencias (qué necesita cargado antes). Sin links de navegación (mantenemos el drawer puro de lectura en v1).
+- **Maestros**: los 4 core (DEMANDA, PRODUCTO, ENRUTAMIENTO_MEZCLAS, CALENDARIO) + MEZCLAS (opcional) + SETUP_EXTRUSORAS + PRODUCTO_COMPLEJO (derivado). Por cada uno: para qué sirve, columnas con tipo (auto), cruces clave (`PRODUCTO.MEZCLA → MEZCLAS.MEZCLA`, `DEMANDA.REFERENCIA → PRODUCTO.REFERENCIA`, etc.), señal de obligatorio vs opcional.
+- **Cálculo de rendimiento**: fórmula `RENDIMIENTO = min(Q_HUSILLO, Q_DSO, Q_LINEA, Q_POST)`, cada cuello con su fórmula y unidades (auto desde `MODELO_CUELLOS_DEFS`), variables requeridas agrupadas por maestro (`MODELO_CUELLOS_REQUIERE`), tabla de rangos típicos (`MODELO_CUELLOS_RANGOS`), explicación de propagación de null y `si_aplica` para los Q_POST condicionales.
+
+**Archivos nuevos:**
+- `src/pages/ayuda/contenido/flujo.md`
+- `src/pages/ayuda/contenido/maestros.md`
+- `src/pages/ayuda/contenido/rendimiento.md`
+- `src/pages/ayuda/mdRenderer.jsx`
+- `src/components/AyudaDrawer.jsx`
+
+**Archivos modificados:**
+- `src/App.jsx` — entrada `AYUDA` en `NAV_ITEMS` con handler `onClick` en vez de `to`, estado `ayudaAbierta` en `AppInner`, listener Esc, render condicional de `<AyudaDrawer />`.
+- `src/index.css` — clases `.ayuda-drawer`, `.ayuda-backdrop`, `.ayuda-accordion-item`, `.ayuda-md-*`. Sin colores hardcodeados (todo con `var(--...)`).
+
+**Fuera de alcance (v2+):** búsqueda dentro de la ayuda, tour guiado paso a paso, tooltips inline en otros componentes, internacionalización, más secciones (verificaciones, reglas, escenario 0).
+
+---
 
 ### Visualizaciones (Recharts instalado, sin usar)
 - Dashboard de ocupación por CM y período (barras apiladas)

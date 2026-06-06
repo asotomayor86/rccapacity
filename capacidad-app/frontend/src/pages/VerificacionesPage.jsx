@@ -236,7 +236,7 @@ export default function VerificacionesPage() {
 
           <VerifCard
             title="V4 · MEZCLAS SIN FICHA EN MAESTRO MEZCLAS"
-            desc="Mezclas con demanda que no tienen ficha en MEZCLAS (necesario para el modelo de cuellos)"
+            desc="Mezclas con demanda que no tienen ficha en el maestro MEZCLAS"
             requiredMasters={[
               { name: "DEMANDA",  loaded: demandaLoaded  },
               { name: "PRODUCTO", loaded: productoLoaded },

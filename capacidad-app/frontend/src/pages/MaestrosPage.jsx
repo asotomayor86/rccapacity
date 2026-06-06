@@ -29,8 +29,8 @@ const MASTER_INFO = {
   },
   MEZCLAS: {
     label: "Mezclas",
-    desc: "Propiedades de cada mezcla para el modelo de rendimiento por cuellos",
-    fields: ["MEZCLA", "RESINA DOMINANTE", "%PCR", "K HUSILLO", "DSO EF (KG/H·MM)", "ρ FILM (KG/M³)"],
+    desc: "Catálogo de mezclas (solo la clave MEZCLA por ahora)",
+    fields: ["MEZCLA"],
     optional: true,
   },
 };

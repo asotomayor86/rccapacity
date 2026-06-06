@@ -141,6 +141,7 @@ const MODAL_SECTIONS = [
       { key: "RPM_MAX",     label: "RPM máximo",              type: "string"  },
       { key: "CAPAS",       label: "Capas",                   type: "decimal"  },
       { key: "HILERA",      label: "Hilera",                  type: "string"  },
+      { key: "CTE_DADO",    label: "Cte. dado",               type: "decimal"  },
       { key: "HUSILLOS",    label: "Husillos",                type: "string"  },
       { key: "ANCHO_MAXIMO",label: "Ancho máximo (mm)",       type: "decimal",  positive: true },
     ],
@@ -170,16 +171,6 @@ const MODAL_SECTIONS = [
       { key: "VENTANA_MIN_PLEGADO", label: "Ventana mín. plegado (mm)", type: "decimal", positive: true },
       { key: "FUELLE_MAXIMO",       label: "Fuelle máximo (mm)",        type: "decimal", positive: true },
       { key: "TRATADOR_CORONA",     label: "Tratador corona",           type: "boolean" },
-    ],
-  },
-  {
-    title: "Parámetros de rendimiento",
-    fields: [
-      { key: "D_DIE",            label: "D DIE (mm)",                  type: "decimal", positive: true },
-      { key: "COOLING_FACTOR",   label: "Cooling factor",              type: "decimal", positive: true },
-      { key: "CORONA_KW",        label: "Corona (kW)",                 type: "decimal" },
-      { key: "V_MAX_SOLDADOR",   label: "V máx. soldador (m/min)",     type: "decimal", positive: true },
-      { key: "V_MAX_ABREFACIL",  label: "V máx. abrefácil (m/min)",    type: "decimal", positive: true },
     ],
   },
 ];

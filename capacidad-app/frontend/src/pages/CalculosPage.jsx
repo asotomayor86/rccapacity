@@ -3,12 +3,6 @@ import useStore from "../state";
 import { exportCalculos } from "../services/exporter";
 import { autoImportCalculos } from "../services/csvParser";
 import { useToast } from "../components/Toast";
-import { MASTER_SCHEMAS_META } from "../masterSchemas";
-import {
-  MODELO_CUELLOS_DEFS,
-  MODELO_CUELLOS_REQUIERE,
-  MODELO_CUELLOS_RANGOS,
-} from "../services/modeloCuellos";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -25,29 +19,19 @@ const SETUP_FIELDS = [
   "SOPLADO_HD", "SOPLADO_LD", "ANCHO_MAXIMO", "CORTE_LATERAL", "CORTE_CENTRAL",
   "ABREFACIL_LATERAL", "ABREFACIL_CENTRAL", "SOLDADOR_LONGITUDINAL", "MADERAS_PLEGADO",
   "VENTANA_MIN_PLEGADO", "FUELLE_MAXIMO", "TRATADOR_CORONA", "CORTE_LAMINA",
-  // Parámetros de rendimiento (Sprint B)
-  "D_DIE", "COOLING_FACTOR", "CORONA_KW", "V_MAX_SOLDADOR", "V_MAX_ABREFACIL",
+  "CTE_DADO",
 ];
-
-// MEZCLA es string clave; RESINA_DOMINANTE es string documental → excluidos del dropdown numérico
-const MEZCLAS_FIELDS = ["K_HUSILLO", "DSO_EF", "RHO_FILM", "PCT_PCR"];
 
 const OPS    = ["+", "-", "*", "/", "^"];
 const OP_SYM = { "+": "+", "-": "−", "*": "×", "/": "÷", "^": "^" };
 
-const NOMBRES_PERMITIDOS = [
-  "RS", "RENDIMIENTO",
-  "Q_HUSILLO", "Q_DSO", "Q_LINEA", "Q_POST",
-  "Q_POST_CORONA", "Q_POST_SOLDADOR", "Q_POST_ABREFACIL",
-  "AUX_1", "AUX_2", "AUX_3",
-];
+// Precedencia y asociatividad para el compilador de tokens y el render de texto.
+const PREC = { "+": 2, "-": 2, "*": 3, "/": 3, "^": 4 };
+const RIGHT_ASSOC = { "^": true };
 
-// Mapas tipo por (fuente, campo)
-const TYPE_BY_SOURCE = {
-  PRODUCTO_COMPLEJO: Object.fromEntries((MASTER_SCHEMAS_META.PRODUCTO_COMPLEJO ?? []).map((f) => [f.name, f.type])),
-  SETUP_EXTRUSORAS:  Object.fromEntries((MASTER_SCHEMAS_META.SETUP_EXTRUSORAS  ?? []).map((f) => [f.name, f.type])),
-  MEZCLAS:           Object.fromEntries((MASTER_SCHEMAS_META.MEZCLAS           ?? []).map((f) => [f.name, f.type])),
-};
+// RS y RENDIMIENTO son los dos cálculos "maestro" (nombre fijo) que viajan a las
+// tablas intermedias. Cualquier otro cálculo es intermedio y lleva nombre libre.
+const RESERVADOS = ["RS", "RENDIMIENTO"];
 
 function newId() {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -55,38 +39,38 @@ function newId() {
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Texto de la fórmula (precedencia-aware, paréntesis mínimos) ────────────────
 
-// Determina si un nodo puede usarse como condición boolean (para validación
-// visual del slot "condición" de si_aplica). Permisivo con referencia_calculo.
-function esCondicionBoolean(nodo) {
-  if (!nodo) return false;
-  if (nodo.tipo === "booleana") return true;
-  if (nodo.tipo === "campo") {
-    const t = TYPE_BY_SOURCE[nodo.fuente]?.[nodo.campo];
-    return t === "boolean";
-  }
-  if (nodo.tipo === "referencia_calculo") return true; // no podemos saber sin evaluar
-  return false;
-}
-
-function formulaTexto(nodo) {
+function formulaTexto(nodo, parentOp = null, side = "root") {
   if (!nodo) return "?";
   if (nodo.tipo === "constante") return String(nodo.valor ?? "?");
   if (nodo.tipo === "nulo")      return "null";
   if (nodo.tipo === "campo")     return nodo.campo ?? "?";
   if (nodo.tipo === "operacion") {
-    const op = OP_SYM[nodo.operador] ?? nodo.operador;
-    return `(${formulaTexto(nodo.hijos?.[0] ?? null)} ${op} ${formulaTexto(nodo.hijos?.[1] ?? null)})`;
+    const sym = OP_SYM[nodo.operador] ?? nodo.operador;
+    const izq = formulaTexto(nodo.hijos?.[0] ?? null, nodo.operador, "left");
+    const der = formulaTexto(nodo.hijos?.[1] ?? null, nodo.operador, "right");
+    const s = `${izq} ${sym} ${der}`;
+    const p  = PREC[nodo.operador] ?? 0;
+    const pp = parentOp ? (PREC[parentOp] ?? 0) : 0;
+    let paren = false;
+    if (parentOp) {
+      if (p < pp) paren = true;
+      else if (p === pp) {
+        if (side === "right" && !RIGHT_ASSOC[parentOp]) paren = true;
+        if (side === "left"  &&  RIGHT_ASSOC[parentOp]) paren = true;
+      }
+    }
+    return paren ? `(${s})` : s;
   }
   if (nodo.tipo === "operacion_naria") {
-    return `${nodo.operador}(${(nodo.hijos ?? []).map(formulaTexto).join(", ")})`;
+    return `${nodo.operador}(${(nodo.hijos ?? []).map((h) => formulaTexto(h)).join(", ")})`;
   }
   if (nodo.tipo === "si_aplica") {
     return `si_aplica(${formulaTexto(nodo.condicion)}, ${formulaTexto(nodo.valor)})`;
   }
   if (nodo.tipo === "booleana") {
-    const hijos = (nodo.hijos ?? []).map(formulaTexto);
+    const hijos = (nodo.hijos ?? []).map((h) => formulaTexto(h));
     if (nodo.operador === "not") return `not(${hijos[0] ?? "?"})`;
     return `${nodo.operador}(${hijos.join(", ")})`;
   }
@@ -94,509 +78,313 @@ function formulaTexto(nodo) {
   return "?";
 }
 
-// ── SlotVacío ─────────────────────────────────────────────────────────────────
-
-function SlotVacio({ inputs, definiciones, currentNombre, onReplace }) {
-  const [mode,   setMode]   = useState(null);
-  const [cteVal, setCteVal] = useState("");
-
-  if (mode === "campo") {
-    return (
-      <select
-        className="form-control"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 200 }}
-        defaultValue=""
-        autoFocus
-        onChange={(e) => {
-          if (!e.target.value) return;
-          const [fuente, campo] = e.target.value.split("|");
-          onReplace({ tipo: "campo", fuente, campo });
-          setMode(null);
-        }}
-        onBlur={() => setMode(null)}
-      >
-        <option value="">-- selecciona campo --</option>
-        {inputs.map((inp) => (
-          <option key={`${inp.fuente}|${inp.campo}`} value={`${inp.fuente}|${inp.campo}`}>
-            {inp.fuente}.{inp.campo}
-          </option>
-        ))}
-      </select>
-    );
+// Texto de la secuencia de fichas tal cual la construye el usuario: conserva
+// TODOS los paréntesis colocados (a diferencia de formulaTexto, que aplica
+// paréntesis mínimos sobre la AST ya compilada).
+function tokensTexto(tokens) {
+  let s = "";
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    let pieza = "?";
+    if      (t.k === "(")     pieza = "(";
+    else if (t.k === ")")     pieza = ")";
+    else if (t.k === ",")     pieza = ",";
+    else if (t.k === "func")  pieza = `${t.name}(`;
+    else if (t.k === "op")    pieza = OP_SYM[t.op] ?? t.op;
+    else if (t.k === "campo") pieza = t.campo;
+    else if (t.k === "const") pieza = String(t.valor);
+    else if (t.k === "ref")   pieza = `[${t.calculo_id}]`;
+    if (i === 0) { s = pieza; continue; }
+    const prev = tokens[i - 1];
+    const pegar = t.k === ")" || t.k === "," || prev.k === "(" || prev.k === "func";
+    s += pegar ? pieza : ` ${pieza}`;
   }
-
-  if (mode === "constante") {
-    return (
-      <input
-        type="number"
-        className="form-control"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, width: 110 }}
-        placeholder="0"
-        value={cteVal}
-        autoFocus
-        onChange={(e) => setCteVal(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            const n = parseFloat(cteVal);
-            if (!isNaN(n)) onReplace({ tipo: "constante", valor: n });
-            setMode(null); setCteVal("");
-          }
-          if (e.key === "Escape") { setMode(null); setCteVal(""); }
-        }}
-        onBlur={() => {
-          const n = parseFloat(cteVal);
-          if (!isNaN(n)) onReplace({ tipo: "constante", valor: n });
-          setMode(null); setCteVal("");
-        }}
-      />
-    );
-  }
-
-  if (mode === "referencia_calculo") {
-    const disponibles = (definiciones ?? []).filter((d) => d.nombre && d.nombre !== currentNombre);
-    return (
-      <select
-        className="form-control"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 200 }}
-        defaultValue=""
-        autoFocus
-        onChange={(e) => {
-          if (!e.target.value) return;
-          onReplace({ tipo: "referencia_calculo", calculo_id: e.target.value });
-          setMode(null);
-        }}
-        onBlur={() => setMode(null)}
-      >
-        <option value="">-- selecciona cálculo --</option>
-        {disponibles.map((d) => (
-          <option key={d.id} value={d.nombre}>{d.nombre}</option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <div style={{ border: "1px dashed var(--border)", borderRadius: "var(--radius)", padding: "5px 10px", display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap", background: "var(--bg-surface-2)" }}>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#f59e0b" }} onClick={() => setMode("campo")} disabled={inputs.length === 0} title={inputs.length === 0 ? "Selecciona inputs primero" : "Insertar campo"}>Campo</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "var(--text-muted)" }} onClick={() => setMode("constante")}>Constante</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#3b82f6" }} onClick={() => onReplace({ tipo: "operacion", operador: "*", hijos: [null, null] })} title="Insertar operación binaria">Op</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#3b82f6" }} onClick={() => onReplace({ tipo: "operacion_naria", operador: "min", hijos: [null, null] })} title="Insertar mínimo n-ario">Min</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#3b82f6" }} onClick={() => onReplace({ tipo: "operacion_naria", operador: "max", hijos: [null, null] })} title="Insertar máximo n-ario">Max</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "var(--text-muted)" }} onClick={() => onReplace({ tipo: "nulo" })} title="Insertar valor nulo">Nulo</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#f97316" }} onClick={() => onReplace({ tipo: "si_aplica", condicion: null, valor: null })} title="Insertar si_aplica">Si aplica</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#a855f7" }} onClick={() => onReplace({ tipo: "booleana", operador: "and", hijos: [null, null] })} title="Insertar operación booleana">Booleano</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#60a5fa" }} onClick={() => setMode("referencia_calculo")} disabled={(definiciones ?? []).filter((d) => d.nombre !== currentNombre).length === 0} title="Insertar referencia a otro cálculo">Cálculo</button>
-    </div>
-  );
+  return s;
 }
 
-// ── NodoCampo ─────────────────────────────────────────────────────────────────
+// ── Compilación tokens → AST y linearización AST → tokens ─────────────────────
 
-function NodoCampo({ nodo, inputs, onReplace }) {
-  const [editing, setEditing] = useState(false);
-
-  if (editing) {
-    return (
-      <select
-        className="form-control"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 200 }}
-        defaultValue={`${nodo.fuente}|${nodo.campo}`}
-        autoFocus
-        onChange={(e) => {
-          if (!e.target.value) { setEditing(false); return; }
-          const [fuente, campo] = e.target.value.split("|");
-          onReplace({ tipo: "campo", fuente, campo });
-          setEditing(false);
-        }}
-        onBlur={() => setEditing(false)}
-      >
-        <option value="">-- selecciona campo --</option>
-        {inputs.map((inp) => (
-          <option key={`${inp.fuente}|${inp.campo}`} value={`${inp.fuente}|${inp.campo}`}>
-            {inp.fuente}.{inp.campo}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <span
-        onClick={() => setEditing(true)}
-        title={`${nodo.fuente}.${nodo.campo} · clic para cambiar`}
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)", cursor: "pointer", userSelect: "none" }}
-      >
-        {nodo.campo}
-      </span>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "#3b82f6" }} onClick={() => onReplace({ tipo: "operacion", operador: "*", hijos: [nodo, null] })} title="Envolver en operación">( )</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar">✕</button>
-    </span>
-  );
-}
-
-// ── NodoConstante ─────────────────────────────────────────────────────────────
-
-function NodoConstante({ nodo, onReplace }) {
-  const [editing, setEditing] = useState(false);
-  const [val,     setVal]     = useState(String(nodo.valor ?? ""));
-
-  if (editing) {
-    return (
-      <input
-        type="number"
-        className="form-control"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, width: 100 }}
-        value={val}
-        autoFocus
-        onChange={(e) => setVal(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") { const n = parseFloat(val); if (!isNaN(n)) onReplace({ ...nodo, valor: n }); setEditing(false); }
-          if (e.key === "Escape") setEditing(false);
-        }}
-        onBlur={() => { const n = parseFloat(val); if (!isNaN(n)) onReplace({ ...nodo, valor: n }); setEditing(false); }}
-      />
-    );
-  }
-
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <span
-        onClick={() => { setVal(String(nodo.valor ?? "")); setEditing(true); }}
-        title="Clic para editar"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "var(--bg-surface-2)", color: "var(--text-primary)", border: "1px solid var(--border)", cursor: "pointer", userSelect: "none" }}
-      >
-        {nodo.valor}
-      </span>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "#3b82f6" }} onClick={() => onReplace({ tipo: "operacion", operador: "*", hijos: [nodo, null] })} title="Envolver en operación">( )</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar">✕</button>
-    </span>
-  );
-}
-
-// ── NodoNulo ──────────────────────────────────────────────────────────────────
-
-function NodoNulo({ onReplace }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <span
-        title="Constante null"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)", userSelect: "none" }}
-      >
-        null
-      </span>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar">✕</button>
-    </span>
-  );
-}
-
-// ── NodoReferenciaCalculo ─────────────────────────────────────────────────────
-
-function NodoReferenciaCalculo({ nodo, definiciones, currentNombre, onReplace }) {
-  const [editing, setEditing] = useState(false);
-  const disponibles = (definiciones ?? []).filter((d) => d.nombre && d.nombre !== currentNombre);
-
-  if (editing) {
-    return (
-      <select
-        className="form-control"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 200 }}
-        defaultValue={nodo.calculo_id ?? ""}
-        autoFocus
-        onChange={(e) => {
-          if (!e.target.value) { setEditing(false); return; }
-          onReplace({ tipo: "referencia_calculo", calculo_id: e.target.value });
-          setEditing(false);
-        }}
-        onBlur={() => setEditing(false)}
-      >
-        <option value="">-- selecciona cálculo --</option>
-        {disponibles.map((d) => (
-          <option key={d.id} value={d.nombre}>{d.nombre}</option>
-        ))}
-      </select>
-    );
-  }
-
-  const existe = (definiciones ?? []).some((d) => d.nombre === nodo.calculo_id);
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <span
-        onClick={() => setEditing(true)}
-        title={existe ? `Referencia a cálculo "${nodo.calculo_id}"` : `Cálculo "${nodo.calculo_id}" no existe`}
-        style={{
-          fontFamily: "var(--font-mono)", fontSize: 11, padding: "3px 8px", borderRadius: 999,
-          background: "rgba(96,165,250,0.12)", color: existe ? "#60a5fa" : "var(--error)",
-          border: `1px solid ${existe ? "rgba(96,165,250,0.3)" : "var(--error)"}`,
-          cursor: "pointer", userSelect: "none",
-        }}
-      >
-        [{nodo.calculo_id ?? "?"}]
-      </span>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "#3b82f6" }} onClick={() => onReplace({ tipo: "operacion", operador: "*", hijos: [nodo, null] })} title="Envolver en operación">( )</button>
-      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar">✕</button>
-    </span>
-  );
-}
-
-// ── NodoOperacion (binaria) ───────────────────────────────────────────────────
-
-function NodoOperacion({ nodo, inputs, definiciones, currentNombre, onReplace }) {
-  function updateHijo(i, nuevo) {
-    const hijos = [...(nodo.hijos ?? [null, null])];
-    hijos[i] = nuevo;
-    onReplace({ ...nodo, hijos });
-  }
-
-  return (
-    <div style={{ display: "inline-block", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "var(--radius)", background: "rgba(59,130,246,0.05)", padding: "8px 10px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 10 }}>
-        {OPS.map((op) => (
-          <button
-            key={op}
-            className="btn btn-ghost btn-sm"
-            style={{ fontFamily: "var(--font-mono)", fontSize: 14, padding: "1px 8px", fontWeight: nodo.operador === op ? 700 : 400, color: nodo.operador === op ? "#3b82f6" : "var(--text-muted)", borderBottom: nodo.operador === op ? "2px solid #3b82f6" : "2px solid transparent" }}
-            onClick={() => onReplace({ ...nodo, operador: op })}
-          >
-            {OP_SYM[op]}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar nodo y hijos">✕</button>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>izq</div>
-          <NodoBuilder nodo={nodo.hijos?.[0] ?? null} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={(n) => updateHijo(0, n)} />
-        </div>
-        <div style={{ fontSize: 18, color: "rgba(59,130,246,0.5)", paddingTop: 18, userSelect: "none" }}>{OP_SYM[nodo.operador]}</div>
-        <div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>der</div>
-          <NodoBuilder nodo={nodo.hijos?.[1] ?? null} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={(n) => updateHijo(1, n)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── NodoOperacionNaria (min/max con ≥2 hijos) ─────────────────────────────────
-
-function NodoOperacionNaria({ nodo, inputs, definiciones, currentNombre, onReplace }) {
-  const hijos = nodo.hijos ?? [];
-
-  function updateHijo(i, nuevo) {
-    const next = [...hijos];
-    next[i] = nuevo;
-    onReplace({ ...nodo, hijos: next });
-  }
-  function addHijo()       { onReplace({ ...nodo, hijos: [...hijos, null] }); }
-  function removeHijo(i)   {
-    if (hijos.length <= 2) return; // mantener mínimo 2
-    onReplace({ ...nodo, hijos: hijos.filter((_, idx) => idx !== i) });
-  }
-
-  return (
-    <div style={{ display: "inline-block", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "var(--radius)", background: "rgba(59,130,246,0.05)", padding: "8px 10px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 10 }}>
-        {["min", "max"].map((op) => (
-          <button
-            key={op}
-            className="btn btn-ghost btn-sm"
-            style={{ fontFamily: "var(--font-mono)", fontSize: 12, padding: "1px 10px", fontWeight: nodo.operador === op ? 700 : 400, color: nodo.operador === op ? "#3b82f6" : "var(--text-muted)", borderBottom: nodo.operador === op ? "2px solid #3b82f6" : "2px solid transparent" }}
-            onClick={() => onReplace({ ...nodo, operador: op })}
-          >
-            {op}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar nodo y hijos">✕</button>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-        {hijos.map((hijo, i) => (
-          <div key={i} style={{ position: "relative" }}>
-            <div style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>arg {i + 1}</span>
-              {hijos.length > 2 && (
-                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: "0 4px", color: "var(--error)" }} onClick={() => removeHijo(i)} title="Eliminar este argumento">✕</button>
-              )}
-            </div>
-            <NodoBuilder nodo={hijo} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={(n) => updateHijo(i, n)} />
-          </div>
-        ))}
-        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "4px 10px", color: "#3b82f6", alignSelf: "flex-start", marginTop: 18 }} onClick={addHijo} title="Añadir argumento">+ añadir hijo</button>
-      </div>
-    </div>
-  );
-}
-
-// ── NodoSiAplica ──────────────────────────────────────────────────────────────
-
-function NodoSiAplica({ nodo, inputs, definiciones, currentNombre, onReplace }) {
-  const condicionInvalid = nodo.condicion !== null && nodo.condicion !== undefined && !esCondicionBoolean(nodo.condicion);
-
-  return (
-    <div style={{ display: "inline-block", border: "1px solid rgba(249,115,22,0.4)", borderRadius: "var(--radius)", background: "rgba(249,115,22,0.05)", padding: "8px 10px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "#f97316" }}>si_aplica</span>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar">✕</button>
-      </div>
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <div style={{ padding: condicionInvalid ? 4 : 0, border: condicionInvalid ? "1px dashed var(--error)" : "1px dashed transparent", borderRadius: 4 }}>
-          <div style={{ fontSize: 9, color: condicionInvalid ? "var(--error)" : "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>condición</div>
-          <NodoBuilder nodo={nodo.condicion ?? null} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={(n) => onReplace({ ...nodo, condicion: n })} />
-          {condicionInvalid && (
-            <div style={{ fontSize: 9, color: "var(--error)", marginTop: 3, fontFamily: "var(--font-mono)" }}>
-              ⚠ debe ser boolean
-            </div>
-          )}
-        </div>
-        <div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>valor</div>
-          <NodoBuilder nodo={nodo.valor ?? null} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={(n) => onReplace({ ...nodo, valor: n })} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── NodoBooleana ──────────────────────────────────────────────────────────────
-
-function NodoBooleana({ nodo, inputs, definiciones, currentNombre, onReplace }) {
-  const operador = nodo.operador ?? "and";
-  const isNot    = operador === "not";
-  const hijos    = nodo.hijos ?? (isNot ? [null] : [null, null]);
-
-  function setOperador(op) {
-    let nuevosHijos = hijos;
-    if (op === "not" && hijos.length > 1) nuevosHijos = [hijos[0]];
-    if (op !== "not" && hijos.length < 2) nuevosHijos = [hijos[0] ?? null, null];
-    onReplace({ ...nodo, operador: op, hijos: nuevosHijos });
-  }
-  function updateHijo(i, nuevo) {
-    const next = [...hijos];
-    next[i] = nuevo;
-    onReplace({ ...nodo, hijos: next });
-  }
-  function addHijo()     { if (!isNot) onReplace({ ...nodo, hijos: [...hijos, null] }); }
-  function removeHijo(i) {
-    if (isNot || hijos.length <= 2) return;
-    onReplace({ ...nodo, hijos: hijos.filter((_, idx) => idx !== i) });
-  }
-
-  return (
-    <div style={{ display: "inline-block", border: "1px solid rgba(168,85,247,0.4)", borderRadius: "var(--radius)", background: "rgba(168,85,247,0.05)", padding: "8px 10px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10 }}>
-        {["and", "or", "not"].map((op) => (
-          <button
-            key={op}
-            className="btn btn-ghost btn-sm"
-            style={{ fontFamily: "var(--font-mono)", fontSize: 12, padding: "1px 10px", fontWeight: operador === op ? 700 : 400, color: operador === op ? "#a855f7" : "var(--text-muted)", borderBottom: operador === op ? "2px solid #a855f7" : "2px solid transparent" }}
-            onClick={() => setOperador(op)}
-          >
-            {op}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "1px 5px", color: "var(--error)" }} onClick={() => onReplace(null)} title="Eliminar">✕</button>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-        {hijos.map((hijo, i) => (
-          <div key={i}>
-            <div style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-              <span>{isNot ? "operando" : `arg ${i + 1}`}</span>
-              {!isNot && hijos.length > 2 && (
-                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: "0 4px", color: "var(--error)" }} onClick={() => removeHijo(i)} title="Eliminar este argumento">✕</button>
-              )}
-            </div>
-            <NodoBuilder nodo={hijo} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={(n) => updateHijo(i, n)} />
-          </div>
-        ))}
-        {!isNot && (
-          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: "4px 10px", color: "#a855f7", alignSelf: "flex-start", marginTop: 18 }} onClick={addHijo} title="Añadir argumento">+ añadir hijo</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── NodoBuilder (dispatch) ────────────────────────────────────────────────────
-
-function NodoBuilder({ nodo, inputs, definiciones, currentNombre, onReplace }) {
-  if (!nodo) return <SlotVacio inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={onReplace} />;
-  if (nodo.tipo === "constante")           return <NodoConstante nodo={nodo} onReplace={onReplace} />;
-  if (nodo.tipo === "campo")               return <NodoCampo    nodo={nodo} inputs={inputs} onReplace={onReplace} />;
-  if (nodo.tipo === "operacion")           return <NodoOperacion       nodo={nodo} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={onReplace} />;
-  if (nodo.tipo === "operacion_naria")     return <NodoOperacionNaria  nodo={nodo} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={onReplace} />;
-  if (nodo.tipo === "nulo")                return <NodoNulo            onReplace={onReplace} />;
-  if (nodo.tipo === "si_aplica")           return <NodoSiAplica        nodo={nodo} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={onReplace} />;
-  if (nodo.tipo === "booleana")            return <NodoBooleana        nodo={nodo} inputs={inputs} definiciones={definiciones} currentNombre={currentNombre} onReplace={onReplace} />;
-  if (nodo.tipo === "referencia_calculo")  return <NodoReferenciaCalculo nodo={nodo} definiciones={definiciones} currentNombre={currentNombre} onReplace={onReplace} />;
+function tokenANodo(t) {
+  if (t.k === "campo") return { tipo: "campo", fuente: t.fuente, campo: t.campo };
+  if (t.k === "const") return { tipo: "constante", valor: t.valor };
+  if (t.k === "ref")   return { tipo: "referencia_calculo", calculo_id: t.calculo_id };
   return null;
 }
 
-// ── InputSelector (3 columnas: PC, SE, MEZCLAS) ───────────────────────────────
+// Compila una secuencia infija de tokens a la AST existente (parser de
+// descenso recursivo con precedencia). Lanza Error con mensaje legible si la
+// secuencia no es una expresión válida. Tipos de nodo producidos: `operacion`,
+// `operacion_naria` (min/max), `campo`, `constante` y `referencia_calculo`.
+//
+// Gramática:
+//   expr   := term (('+'|'-') term)*
+//   term   := factor (('*'|'/') factor)*
+//   factor := base ('^' factor)?              // ^ asociativo a la derecha
+//   base   := operando | '(' expr ')' | FUNC expr (',' expr)* ')'
+function compilarTokens(tokens) {
+  let i = 0;
+  const peek = () => tokens[i];
 
-function InputSelector({ inputs, onChange }) {
-  function toggle(fuente, campo) {
-    const exists = inputs.some((i) => i.fuente === fuente && i.campo === campo);
-    onChange(exists
-      ? inputs.filter((i) => !(i.fuente === fuente && i.campo === campo))
-      : [...inputs, { fuente, campo }]
-    );
+  function parseExpr() {
+    let left = parseTerm();
+    while (peek() && peek().k === "op" && (peek().op === "+" || peek().op === "-")) {
+      const op = tokens[i++].op;
+      left = { tipo: "operacion", operador: op, hijos: [left, parseTerm()] };
+    }
+    return left;
   }
-  function checked(fuente, campo) {
-    return inputs.some((i) => i.fuente === fuente && i.campo === campo);
+  function parseTerm() {
+    let left = parseFactor();
+    while (peek() && peek().k === "op" && (peek().op === "*" || peek().op === "/")) {
+      const op = tokens[i++].op;
+      left = { tipo: "operacion", operador: op, hijos: [left, parseFactor()] };
+    }
+    return left;
+  }
+  function parseFactor() {
+    const base = parseBase();
+    if (peek() && peek().k === "op" && peek().op === "^") {
+      i++;
+      return { tipo: "operacion", operador: "^", hijos: [base, parseFactor()] };
+    }
+    return base;
+  }
+  function parseBase() {
+    const t = peek();
+    if (!t) throw new Error("La fórmula está incompleta (falta un operando).");
+    if (t.k === "campo" || t.k === "const" || t.k === "ref") { i++; return tokenANodo(t); }
+    if (t.k === "(") {
+      i++;
+      const e = parseExpr();
+      if (!peek() || peek().k !== ")") throw new Error("Falta cerrar un paréntesis.");
+      i++;
+      return e;
+    }
+    if (t.k === "func") {
+      i++;
+      const args = [parseExpr()];
+      while (peek() && peek().k === ",") { i++; args.push(parseExpr()); }
+      if (!peek() || peek().k !== ")") throw new Error(`Falta cerrar ${t.name}( con ')'.`);
+      i++;
+      if (args.length < 2) throw new Error(`${t.name}() necesita al menos 2 argumentos.`);
+      return { tipo: "operacion_naria", operador: t.name, hijos: args };
+    }
+    if (t.k === "op") throw new Error(`El operador ${OP_SYM[t.op] ?? t.op} necesita un operando a su izquierda.`);
+    if (t.k === ")") throw new Error("Hay un ')' sin apertura o un grupo vacío.");
+    if (t.k === ",") throw new Error("Hay una ',' fuera de una función MIN().");
+    throw new Error("Ficha desconocida.");
   }
 
-  const colStyle = { flex: 1, minWidth: 0 };
-  const labelStyle = (selected) => ({
-    display: "flex", alignItems: "center", gap: 6, fontSize: 11,
-    fontFamily: "var(--font-mono)", color: selected ? "#f59e0b" : "var(--text-muted)",
-    marginBottom: 3, cursor: "pointer",
-  });
-  const sectionLabel = { fontSize: 10, fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 };
+  if (tokens.length === 0) throw new Error("La fórmula está vacía.");
+  const ast = parseExpr();
+  if (i < tokens.length) {
+    const t = tokens[i];
+    if (t.k === ")") throw new Error("Hay un ')' sin '(' que lo abra.");
+    if (t.k === ",") throw new Error("Hay una ',' fuera de una función MIN().");
+    throw new Error("Sobran fichas tras una expresión completa (¿falta un operador?).");
+  }
+  return ast;
+}
+
+// Convierte una AST aritmética a tokens (para editar definiciones antiguas o
+// importadas que solo tienen `arbol`). Devuelve { ok:false } si contiene nodos
+// no representables en modo lineal (min/max, si_aplica, booleana, nulo).
+function linearizar(nodo) {
+  const out = [];
+  const rec = (n, parentOp, side) => {
+    if (!n) return false;
+    if (n.tipo === "campo")              { out.push({ k: "campo", fuente: n.fuente, campo: n.campo }); return true; }
+    if (n.tipo === "constante")          { out.push({ k: "const", valor: n.valor }); return true; }
+    if (n.tipo === "referencia_calculo") { out.push({ k: "ref", calculo_id: n.calculo_id }); return true; }
+    if (n.tipo === "operacion") {
+      const p  = PREC[n.operador] ?? 0;
+      const pp = parentOp ? (PREC[parentOp] ?? 0) : 0;
+      let paren = false;
+      if (parentOp) {
+        if (p < pp) paren = true;
+        else if (p === pp) {
+          if (side === "right" && !RIGHT_ASSOC[parentOp]) paren = true;
+          if (side === "left"  &&  RIGHT_ASSOC[parentOp]) paren = true;
+        }
+      }
+      if (paren) out.push({ k: "(" });
+      if (!rec(n.hijos?.[0] ?? null, n.operador, "left"))  return false;
+      out.push({ k: "op", op: n.operador });
+      if (!rec(n.hijos?.[1] ?? null, n.operador, "right")) return false;
+      if (paren) out.push({ k: ")" });
+      return true;
+    }
+    if (n.tipo === "operacion_naria" && (n.operador === "min" || n.operador === "max")) {
+      const hijos = n.hijos ?? [];
+      if (hijos.length < 2) return false;
+      out.push({ k: "func", name: n.operador });
+      for (let j = 0; j < hijos.length; j++) {
+        if (j > 0) out.push({ k: "," });
+        if (!rec(hijos[j] ?? null, null, "root")) return false; // cada arg es expresión independiente
+      }
+      out.push({ k: ")" });
+      return true;
+    }
+    return false; // nulo, si_aplica, booleana
+  };
+  const ok = rec(nodo, null, "root");
+  return ok ? { ok: true, tokens: out } : { ok: false, tokens: [] };
+}
+
+// Decide el estado inicial del constructor para una definición dada.
+function deducirTokensIniciales(def) {
+  if (!def) return { tokens: [], avanzado: false };
+  if (Array.isArray(def.tokens)) return { tokens: def.tokens, avanzado: false };
+  if (!def.arbol) return { tokens: [], avanzado: false };
+  const lin = linearizar(def.arbol);
+  if (lin.ok) return { tokens: lin.tokens, avanzado: false };
+  return { tokens: [], avanzado: true };
+}
+
+// ── Chip (ficha individual) ───────────────────────────────────────────────────
+
+function Chip({ t, onDelete }) {
+  const base = { display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-mono)", fontSize: 12, padding: "4px 9px", borderRadius: 6, userSelect: "none" };
+  let label = "?", style = {}, title = "";
+  if (t.k === "(" || t.k === ")") {
+    label = t.k;
+    style = { background: "var(--bg-surface)", color: "var(--text-secondary)", border: "1px solid var(--border)", fontWeight: 700 };
+    title = "Paréntesis";
+  } else if (t.k === ",") {
+    label = ",";
+    style = { background: "var(--bg-surface)", color: "var(--text-secondary)", border: "1px solid var(--border)", fontWeight: 700 };
+    title = "Separador de argumentos";
+  } else if (t.k === "func") {
+    label = `${t.name}(`;
+    style = { background: "rgba(20,184,166,0.14)", color: "#14b8a6", border: "1px solid rgba(20,184,166,0.35)", fontWeight: 700 };
+    title = t.name === "min" ? "Mínimo de los argumentos" : "Máximo de los argumentos";
+  } else if (t.k === "op") {
+    label = OP_SYM[t.op] ?? t.op;
+    style = { background: "rgba(59,130,246,0.12)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", fontWeight: 700 };
+    title = "Operador";
+  } else if (t.k === "campo") {
+    label = t.campo;
+    style = { background: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" };
+    title = `${t.fuente}.${t.campo}`;
+  } else if (t.k === "const") {
+    label = String(t.valor);
+    style = { background: "var(--bg-surface-2)", color: "var(--text-primary)", border: "1px solid var(--border)" };
+    title = "Constante";
+  } else if (t.k === "ref") {
+    label = `[${t.calculo_id}]`;
+    style = { background: "rgba(96,165,250,0.12)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)" };
+    title = `Referencia a ${t.calculo_id}`;
+  }
+  return (
+    <span style={{ ...base, ...style }} title={title}>
+      {label}
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: "0 3px", color: "inherit", opacity: 0.7 }} onClick={onDelete} title="Quitar ficha">×</button>
+    </span>
+  );
+}
+
+// ── ConstructorLineal (secuencia de fichas) ───────────────────────────────────
+
+function ConstructorLineal({ tokens, setTokens, definiciones, currentNombre }) {
+  const [adding, setAdding] = useState(null); // null | "campo" | "const" | "ref"
+  const [cteVal, setCteVal] = useState("");
+
+  const push  = (tok) => setTokens([...tokens, tok]);
+  const delAt = (i)   => setTokens(tokens.filter((_, idx) => idx !== i));
+
+  const refs = (definiciones ?? []).filter((d) => d.nombre && d.nombre !== currentNombre);
+  const divider = <span style={{ width: 1, height: 20, background: "var(--border)", margin: "0 2px" }} />;
+
+  function commitConst() {
+    const n = parseFloat(cteVal);
+    if (!isNaN(n)) push({ k: "const", valor: n });
+    setAdding(null); setCteVal("");
+  }
 
   return (
-    <div style={{ display: "flex", gap: 20 }}>
-      <div style={colStyle}>
-        <div style={sectionLabel}>PRODUCTO COMPLEJO</div>
-        {PRODUCTO_COMPLEJO_FIELDS.map((campo) => {
-          const sel = checked("PRODUCTO_COMPLEJO", campo);
-          return (
-            <label key={campo} style={labelStyle(sel)}>
-              <input type="checkbox" checked={sel} onChange={() => toggle("PRODUCTO_COMPLEJO", campo)} style={{ accentColor: "#f59e0b" }} />
-              {campo}
-            </label>
-          );
-        })}
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <button className="btn btn-ghost btn-sm" style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" }} onClick={() => push({ k: "(" })} title="Abrir paréntesis">(</button>
+        <button className="btn btn-ghost btn-sm" style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" }} onClick={() => push({ k: ")" })} title="Cerrar paréntesis">)</button>
+        <button className="btn btn-ghost btn-sm" style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" }} onClick={() => push({ k: "," })} title="Separador de argumentos (dentro de MIN)">,</button>
+        {divider}
+        {OPS.map((op) => (
+          <button key={op} className="btn btn-ghost btn-sm" style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#3b82f6" }} onClick={() => push({ k: "op", op })} title={`Operador ${OP_SYM[op]}`}>{OP_SYM[op]}</button>
+        ))}
+        {divider}
+        <button className="btn btn-ghost btn-sm" style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#14b8a6" }} onClick={() => push({ k: "func", name: "min" })} title="Mínimo de varios argumentos: MIN(a, b, …)">MIN(</button>
+        {divider}
+        <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: "#f59e0b" }} onClick={() => setAdding("campo")} title="Añadir campo">+ Campo</button>
+        <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: "var(--text-secondary)" }} onClick={() => { setAdding("const"); setCteVal(""); }} title="Añadir constante">+ Constante</button>
+        <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: "#60a5fa" }} onClick={() => setAdding("ref")} disabled={refs.length === 0} title={refs.length === 0 ? "No hay otros cálculos" : "Añadir referencia a otro cálculo"}>+ Cálculo</button>
       </div>
-      <div style={colStyle}>
-        <div style={sectionLabel}>SETUP EXTRUSORAS</div>
-        {SETUP_FIELDS.map((campo) => {
-          const sel = checked("SETUP_EXTRUSORAS", campo);
-          return (
-            <label key={campo} style={labelStyle(sel)}>
-              <input type="checkbox" checked={sel} onChange={() => toggle("SETUP_EXTRUSORAS", campo)} style={{ accentColor: "#f59e0b" }} />
-              {campo}
-            </label>
-          );
-        })}
+
+      {adding === "campo" && (
+        <select
+          className="form-control"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 240, marginBottom: 12 }}
+          defaultValue=""
+          autoFocus
+          onChange={(e) => {
+            if (!e.target.value) { setAdding(null); return; }
+            const [fuente, campo] = e.target.value.split("|");
+            push({ k: "campo", fuente, campo });
+            setAdding(null);
+          }}
+          onBlur={() => setAdding(null)}
+        >
+          <option value="">-- selecciona campo --</option>
+          <optgroup label="PRODUCTO_COMPLEJO">
+            {PRODUCTO_COMPLEJO_FIELDS.map((c) => <option key={`pc|${c}`} value={`PRODUCTO_COMPLEJO|${c}`}>{c}</option>)}
+          </optgroup>
+          <optgroup label="SETUP_EXTRUSORAS">
+            {SETUP_FIELDS.map((c) => <option key={`se|${c}`} value={`SETUP_EXTRUSORAS|${c}`}>{c}</option>)}
+          </optgroup>
+        </select>
+      )}
+      {adding === "const" && (
+        <input
+          type="number"
+          className="form-control"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 11, width: 130, marginBottom: 12 }}
+          placeholder="valor"
+          value={cteVal}
+          autoFocus
+          onChange={(e) => setCteVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitConst();
+            if (e.key === "Escape") { setAdding(null); setCteVal(""); }
+          }}
+          onBlur={commitConst}
+        />
+      )}
+      {adding === "ref" && (
+        <select
+          className="form-control"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 11, minWidth: 200, marginBottom: 12 }}
+          defaultValue=""
+          autoFocus
+          onChange={(e) => {
+            if (!e.target.value) { setAdding(null); return; }
+            push({ k: "ref", calculo_id: e.target.value });
+            setAdding(null);
+          }}
+          onBlur={() => setAdding(null)}
+        >
+          <option value="">-- selecciona cálculo --</option>
+          {refs.map((d) => <option key={d.id} value={d.nombre}>{d.nombre}</option>)}
+        </select>
+      )}
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", minHeight: 46, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--bg-surface-2)" }}>
+        {tokens.length === 0
+          ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Añade fichas para construir la fórmula…</span>
+          : tokens.map((t, i) => <Chip key={i} t={t} onDelete={() => delAt(i)} />)}
       </div>
-      <div style={colStyle}>
-        <div style={sectionLabel}>MEZCLAS</div>
-        {MEZCLAS_FIELDS.map((campo) => {
-          const sel = checked("MEZCLAS", campo);
-          return (
-            <label key={campo} style={labelStyle(sel)}>
-              <input type="checkbox" checked={sel} onChange={() => toggle("MEZCLAS", campo)} style={{ accentColor: "#f59e0b" }} />
-              {campo}
-            </label>
-          );
-        })}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setTokens(tokens.slice(0, -1))} disabled={tokens.length === 0}>⌫ Borrar última</button>
+        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "var(--error)" }} onClick={() => setTokens([])} disabled={tokens.length === 0}>Limpiar todo</button>
       </div>
     </div>
   );
@@ -605,28 +393,47 @@ function InputSelector({ inputs, onChange }) {
 // ── ConstructorPanel ──────────────────────────────────────────────────────────
 
 function ConstructorPanel({ defInicial, isNew, definiciones, onSave, onDelete }) {
-  const [nombre,      setNombre]      = useState(defInicial?.nombre      ?? "RS");
+  const inicialReservado = RESERVADOS.includes(defInicial?.nombre);
+  const [tipoNombre,  setTipoNombre]  = useState(inicialReservado ? defInicial.nombre : "OTRO");
+  const [nombrePers,  setNombrePers]  = useState(inicialReservado ? "" : (defInicial?.nombre ?? ""));
   const [descripcion, setDescripcion] = useState(defInicial?.descripcion ?? "");
   const [unidad,      setUnidad]      = useState(defInicial?.unidad      ?? "");
-  const [inputs,      setInputs]      = useState(defInicial?.inputs      ?? []);
-  const [arbol,       setArbol]       = useState(defInicial?.arbol       ?? null);
+
+  const init = deducirTokensIniciales(defInicial);
+  const [tokens,   setTokens]   = useState(init.tokens);
+  const [avanzado, setAvanzado] = useState(init.avanzado);
+
+  const nombre = tipoNombre === "OTRO" ? nombrePers.trim() : tipoNombre;
+  const nombreError = (() => {
+    if (tipoNombre !== "OTRO") return null;
+    if (!nombre) return "Escribe un nombre para el cálculo.";
+    if (RESERVADOS.some((r) => r.toUpperCase() === nombre.toUpperCase())) return "RS y RENDIMIENTO se eligen desde la lista.";
+    if ((definiciones ?? []).some((d) => d.id !== defInicial?.id && d.nombre === nombre)) return "Ya existe un cálculo con ese nombre.";
+    return null;
+  })();
+
+  // Compila los tokens a AST en vivo: alimenta validación y preview.
+  const compilado = useMemo(() => {
+    if (avanzado)            return { ok: true, arbol: defInicial?.arbol ?? null, error: null };
+    if (tokens.length === 0) return { ok: true, arbol: null, error: null };
+    try   { return { ok: true,  arbol: compilarTokens(tokens), error: null }; }
+    catch (e) { return { ok: false, arbol: null, error: e.message }; }
+  }, [tokens, avanzado, defInicial]);
+
+  const guardarDisabled = !nombre || !!nombreError || (!avanzado && !compilado.ok);
 
   function handleSave() {
-    if (!nombre.trim()) return;
-    onSave({
+    if (guardarDisabled) return;
+    const base = {
       id:          defInicial?.id ?? newId(),
-      nombre:      nombre,
+      nombre,
       descripcion: descripcion.trim(),
       unidad:      unidad.trim(),
-      inputs,
-      arbol,
-    });
+      inputs:      [],
+    };
+    if (avanzado) onSave({ ...base, arbol: defInicial?.arbol ?? null });
+    else          onSave({ ...base, arbol: compilado.arbol, tokens });
   }
-
-  // Construir lista de nombres permitidos (enum + nombre actual si no está en la lista)
-  const nombresEnSelect = NOMBRES_PERMITIDOS.includes(nombre)
-    ? NOMBRES_PERMITIDOS
-    : [...NOMBRES_PERMITIDOS, nombre];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -635,9 +442,23 @@ function ConstructorPanel({ defInicial, isNew, definiciones, onSave, onDelete })
         <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 80px", gap: 10, alignItems: "start" }}>
           <div>
             <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
-            <select className="form-control" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} value={nombre} onChange={(e) => setNombre(e.target.value)}>
-              {nombresEnSelect.map((n) => <option key={n} value={n}>{n}</option>)}
+            <select className="form-control" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} value={tipoNombre} onChange={(e) => setTipoNombre(e.target.value)}>
+              <option value="RS">RS</option>
+              <option value="RENDIMIENTO">RENDIMIENTO</option>
+              <option value="OTRO">OTRO (personalizado)</option>
             </select>
+            {tipoNombre === "OTRO" && (
+              <input
+                className="form-control"
+                style={{ fontFamily: "var(--font-mono)", fontSize: 12, marginTop: 6 }}
+                placeholder="NOMBRE_CALCULO"
+                value={nombrePers}
+                onChange={(e) => setNombrePers(e.target.value)}
+              />
+            )}
+            {nombreError && (
+              <div style={{ fontSize: 10, color: "var(--error)", marginTop: 4, fontFamily: "var(--font-mono)" }}>{nombreError}</div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4, textTransform: "uppercase" }}>Descripción</div>
@@ -651,36 +472,39 @@ function ConstructorPanel({ defInicial, isNew, definiciones, onSave, onDelete })
       </div>
 
       <div className="card">
-        <div className="card-header">
-          <span className="card-title">Inputs de la fórmula</span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            {inputs.length} seleccionado{inputs.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-        <InputSelector inputs={inputs} onChange={setInputs} />
-      </div>
-
-      <div className="card">
-        <div className="card-header"><span className="card-title">Árbol de la fórmula</span></div>
-        <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-          <NodoBuilder
-            nodo={arbol}
-            inputs={inputs}
-            definiciones={definiciones}
-            currentNombre={nombre}
-            onReplace={setArbol}
-          />
-        </div>
-        {arbol && (
-          <div style={{ marginTop: 10, padding: "7px 10px", background: "var(--bg-surface-2)", borderRadius: "var(--radius)", borderTop: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginRight: 8, textTransform: "uppercase" }}>Fórmula:</span>
-            <code style={{ fontSize: 12, color: "var(--accent)" }}>{formulaTexto(arbol)}</code>
+        <div className="card-header"><span className="card-title">Fórmula</span></div>
+        {avanzado ? (
+          <div>
+            <div style={{ padding: "8px 12px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
+              ⚠ Esta fórmula usa operadores avanzados (min/max, si_aplica o booleanos) que no se pueden editar en el constructor lineal. Se muestra en solo lectura.
+            </div>
+            <div style={{ padding: "7px 10px", background: "var(--bg-surface-2)", borderRadius: "var(--radius)" }}>
+              <code style={{ fontSize: 12, color: "var(--accent)" }}>{formulaTexto(defInicial?.arbol ?? null)}</code>
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{ marginTop: 10, fontSize: 12, color: "var(--error)" }} onClick={() => { setAvanzado(false); setTokens([]); }}>
+              Reconstruir con el constructor lineal (se descarta la fórmula actual)
+            </button>
           </div>
+        ) : (
+          <>
+            <ConstructorLineal tokens={tokens} setTokens={setTokens} definiciones={definiciones} currentNombre={nombre} />
+            {!compilado.ok && (
+              <div style={{ marginTop: 10, padding: "7px 10px", background: "rgba(239,68,68,0.08)", border: "1px solid var(--error)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--error)", fontFamily: "var(--font-mono)" }}>
+                ⚠ {compilado.error}
+              </div>
+            )}
+            {compilado.ok && tokens.length > 0 && (
+              <div style={{ marginTop: 10, padding: "7px 10px", background: "var(--bg-surface-2)", borderRadius: "var(--radius)", borderTop: "1px solid var(--border)" }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginRight: 8, textTransform: "uppercase" }}>Fórmula:</span>
+                <code style={{ fontSize: 12, color: "var(--accent)" }}>{tokensTexto(tokens)}</code>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <button className="btn btn-primary" onClick={handleSave} disabled={!nombre.trim()}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={guardarDisabled}>
           {isNew ? "Guardar cálculo" : "Actualizar cálculo"}
         </button>
         {!isNew && (
@@ -688,104 +512,6 @@ function ConstructorPanel({ defInicial, isNew, definiciones, onSave, onDelete })
             Eliminar
           </button>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ── Modal de confirmación "Cargar modelo por defecto" ─────────────────────────
-
-function ConfirmModeloModal({ existentesPorReemplazar, onCancel, onConfirm }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onCancel}>
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", width: "min(92vw, 540px)", padding: "20px 24px", boxShadow: "var(--shadow)" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)", marginBottom: 10 }}>
-          CARGAR MODELO POR DEFECTO
-        </div>
-        <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          Esto añadirá <strong>{MODELO_CUELLOS_DEFS.length} definiciones</strong> de cálculo: Q_HUSILLO, Q_DSO, Q_LINEA, Q_POST_CORONA, Q_POST_SOLDADOR, Q_POST_ABREFACIL, Q_POST y RENDIMIENTO.
-          {existentesPorReemplazar.length > 0 && (
-            <div style={{ marginTop: 10, padding: "8px 12px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "var(--radius)" }}>
-              <div style={{ fontSize: 12, color: "var(--warning)", fontWeight: 600, marginBottom: 4 }}>⚠ Se reemplazarán {existentesPorReemplazar.length} cálculo(s) existente(s):</div>
-              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-                {existentesPorReemplazar.join(", ")}
-              </div>
-            </div>
-          )}
-          <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-muted)" }}>
-            Recuerda que el modelo requiere los maestros <strong>MEZCLAS</strong> cargado y los campos de <strong>SETUP_EXTRUSORAS</strong> (D_DIE, COOLING_FACTOR, etc.) rellenos.
-          </div>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancelar</button>
-          <button className="btn btn-primary btn-sm" onClick={onConfirm}>Continuar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Modal informativo del modelo de cuellos ───────────────────────────────────
-
-function ModeloInfoModal({ onClose }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", width: "min(92vw, 720px)", maxHeight: "90vh", overflowY: "auto", padding: "22px 26px", boxShadow: "var(--shadow)" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
-            MODELO DE RENDIMIENTO POR CUELLOS DE BOTELLA
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: 16 }}>✕</button>
-        </div>
-
-        <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)", marginBottom: 14 }}>
-          El modelo calcula <code style={{ color: "var(--accent)" }}>RENDIMIENTO [kg/h]</code> como el mínimo de cuatro
-          cuellos físicos de la línea:
-        </p>
-        <div style={{ background: "var(--bg-surface-2)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", marginBottom: 16 }}>
-          RENDIMIENTO = min(Q_HUSILLO, Q_DSO, Q_LINEA, Q_POST)
-        </div>
-
-        <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
-          Variables requeridas
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          {Object.entries(MODELO_CUELLOS_REQUIERE).map(([maestro, campos]) => (
-            <div key={maestro} style={{ marginBottom: 6 }}>
-              <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 700 }}>{maestro}:</span>{" "}
-              <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{campos.join(", ")}</span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ padding: "8px 12px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "var(--radius)", marginBottom: 14, fontSize: 12, color: "var(--text-secondary)" }}>
-          ⚠ Estos campos deben estar cargados en sus maestros (MEZCLAS, SETUP EXTRUSORAS) antes de ejecutar el cálculo.
-          Si falta alguno, el valor de RENDIMIENTO se calculará con los cuellos que sí tengan datos.
-        </div>
-
-        <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
-          Rangos típicos
-        </div>
-        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              <th style={{ textAlign: "left", padding: "4px 8px", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>Variable</th>
-              <th style={{ textAlign: "right", padding: "4px 8px", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>Mín</th>
-              <th style={{ textAlign: "right", padding: "4px 8px", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>Máx</th>
-              <th style={{ textAlign: "left", padding: "4px 8px", fontSize: 10, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>Unidad</th>
-            </tr>
-          </thead>
-          <tbody>
-            {MODELO_CUELLOS_RANGOS.map((r) => (
-              <tr key={r.variable}>
-                <td style={{ padding: "4px 8px", fontFamily: "var(--font-mono)", color: "var(--accent)" }}>{r.variable}</td>
-                <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{r.min}</td>
-                <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{r.max}</td>
-                <td style={{ padding: "4px 8px", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>{r.unidad}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -800,22 +526,11 @@ export default function CalculosPage() {
   const updateCalculo = useStore((s) => s.updateCalculo);
   const deleteCalculo = useStore((s) => s.deleteCalculo);
 
-  const [selectedId,     setSelectedId]     = useState(null);
-  const [isNew,          setIsNew]          = useState(false);
-  const [confirmModelo,  setConfirmModelo]  = useState(false);
-  const [showInfoModal,  setShowInfoModal]  = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [isNew,      setIsNew]      = useState(false);
 
   const selectedDef = definiciones.find((d) => d.id === selectedId) ?? null;
   const showConstructor = isNew || selectedDef !== null;
-
-  const nombresExistentes = useMemo(
-    () => new Set(definiciones.map((d) => d.nombre).filter(Boolean)),
-    [definiciones]
-  );
-  const existentesPorReemplazar = useMemo(
-    () => MODELO_CUELLOS_DEFS.map((d) => d.nombre).filter((n) => nombresExistentes.has(n)),
-    [nombresExistentes]
-  );
 
   function handleNuevo()      { setSelectedId(null); setIsNew(true); }
   function handleSelect(id)   { setSelectedId(id); setIsNew(false); }
@@ -873,28 +588,6 @@ export default function CalculosPage() {
     input.click();
   }
 
-  function handleCargarModelo() {
-    setConfirmModelo(true);
-  }
-
-  function confirmCargarModelo() {
-    const definicionesActuales = useStore.getState().calculos.DEFINICIONES;
-    const porNombre = new Map(definicionesActuales.map((d) => [d.nombre, d]));
-    let reemplazados = 0, nuevos = 0;
-    for (const d of MODELO_CUELLOS_DEFS) {
-      const existing = porNombre.get(d.nombre);
-      if (existing) {
-        updateCalculo(existing.id, { ...d, id: existing.id });
-        reemplazados++;
-      } else {
-        addCalculo({ ...d });
-        nuevos++;
-      }
-    }
-    setConfirmModelo(false);
-    toast.success(`Modelo cargado: ${nuevos} nuevo(s), ${reemplazados} reemplazado(s).`);
-  }
-
   return (
     <>
       <div className="page-header">
@@ -902,19 +595,6 @@ export default function CalculosPage() {
           <div>
             <h1 className="page-title">CÁLCULOS</h1>
             <p className="page-subtitle">Constructor visual de fórmulas de cálculo.</p>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn btn-secondary btn-sm" onClick={handleCargarModelo} title="Cargar definiciones del modelo de cuellos de botella">
-              Cargar modelo por defecto
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setShowInfoModal(true)}
-              title="Información sobre el modelo de cuellos"
-              style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--border)", padding: 0, fontSize: 13, fontFamily: "var(--font-mono)" }}
-            >
-              i
-            </button>
           </div>
         </div>
       </div>
@@ -974,15 +654,6 @@ export default function CalculosPage() {
           )}
         </div>
       </div>
-
-      {confirmModelo && (
-        <ConfirmModeloModal
-          existentesPorReemplazar={existentesPorReemplazar}
-          onCancel={() => setConfirmModelo(false)}
-          onConfirm={confirmCargarModelo}
-        />
-      )}
-      {showInfoModal && <ModeloInfoModal onClose={() => setShowInfoModal(false)} />}
     </>
   );
 }

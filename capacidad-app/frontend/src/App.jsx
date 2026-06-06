@@ -15,6 +15,7 @@ import IntermediasCalculadasPage from "./pages/IntermediasCalculadasPage";
 import { loadDirectoryHandle, pickDirectory } from "./services/fileSystemAccess";
 import ImportarUltimosPage from "./pages/ImportarUltimosPage";
 import VerificacionesPage from "./pages/VerificacionesPage";
+import { AyudaIndicePage, AyudaSeccionPage } from "./pages/AyudaPage";
 import useStore from "./state";
 
 const NAV_ITEMS = [
@@ -98,6 +99,15 @@ const NAV_ITEMS = [
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="nav-icon">
         <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+      </svg>
+    ),
+  },
+  {
+    to: "/ayuda",
+    label: "AYUDA",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="nav-icon">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1.5 1.5 0 00-1.5 1.5 1 1 0 11-2 0 3.5 3.5 0 117 0c0 1.3-.84 2.2-1.65 2.74a6.5 6.5 0 01-1.1.6c-.04.02-.07.04-.1.05L11 10.5a1 1 0 11-2 0v-.07c0-.34.18-.74.59-.97l.05-.03.07-.04.34-.18a4.5 4.5 0 00.79-.45c.5-.34.66-.62.66-.91A1.5 1.5 0 0010 5z" clipRule="evenodd" />
       </svg>
     ),
   },
@@ -220,6 +230,8 @@ function AppInner() {
           <Route path="/importar-ultimos" element={<ImportarUltimosPage />} />
           <Route path="/setup-extrusoras" element={<SetupExtrusorasPage />} />
           <Route path="/resultados" element={<ResultadosPage />} />
+          <Route path="/ayuda" element={<AyudaIndicePage />} />
+          <Route path="/ayuda/:seccion" element={<AyudaSeccionPage />} />
         </Routes>
       </main>
 
