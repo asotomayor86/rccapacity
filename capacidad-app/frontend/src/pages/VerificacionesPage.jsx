@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import useStore from "../state";
 import MasterViewer from "../components/MasterViewer";
 import { useToast } from "../components/Toast";
@@ -48,7 +48,7 @@ function VerifCard({ title, desc, requiredMasters, result, onCalcular, onVisuali
   const calculated = result !== null;
 
   return (
-    <div className="card" style={cs}>
+    <div className="card card-compact" style={cs}>
       <div className="card-header">
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: calculated ? "var(--text-primary)" : "var(--text-muted)", letterSpacing: "0.06em", marginBottom: 2 }}>
@@ -61,7 +61,7 @@ function VerifCard({ title, desc, requiredMasters, result, onCalcular, onVisuali
         </span>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 14 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
         {requiredMasters.map((m) => (
           <span
             key={m.name}
@@ -78,7 +78,7 @@ function VerifCard({ title, desc, requiredMasters, result, onCalcular, onVisuali
       </div>
 
       {calculated && (
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 14, padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 8, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
           <span>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: result.length > 0 ? "var(--warning)" : "var(--success)", marginRight: 6 }}>
               {result.length.toLocaleString("es-ES")}
@@ -124,6 +124,245 @@ const STORE_KEY_BY_VIEW = {
   V4: "MEZCLAS_SIN_FICHA",
 };
 
+// ── Cobertura mensual (DEMANDA vs CAPACIDAD) ──────────────────────────────────
+
+const MESES_ABBR = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+
+// MES se almacena normalizado como "YYYY-MM-01" → clave de mes "YYYY-MM".
+function monthKey(mes) { return String(mes ?? "").slice(0, 7); }
+
+// Rango contiguo de meses entre dos claves "YYYY-MM" (ambas incluidas).
+function buildMonths(firstKey, lastKey) {
+  const [fy, fm] = firstKey.split("-").map(Number);
+  const [ly, lm] = lastKey.split("-").map(Number);
+  const out = [];
+  let y = fy, m = fm, guard = 0;
+  while ((y < ly || (y === ly && m <= lm)) && guard++ < 600) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+function CoberturaMensual({ demanda, calendario, producto, enrutamiento }) {
+  const data = useMemo(() => {
+    if (!demanda || demanda.length === 0) return null;
+    const norm = (v) => String(v ?? "").trim();
+
+    // Referencia → mezcla (Producto) y mezclas con ruta (Enrutamiento Mezclas).
+    // Mismo cruce que V1–V3: trim, sensible a mayúsculas. Una referencia está
+    // "enrutada" si existe en Producto, tiene mezcla, y esa mezcla aparece en
+    // Enrutamiento Mezclas (es decir, llega a una extrusora vía su MO).
+    const refMezcla = new Map();
+    for (const p of (producto || [])) refMezcla.set(norm(p.REFERENCIA), norm(p.MEZCLA));
+    const mezclasRuta = new Set();
+    for (const e of (enrutamiento || [])) { const m = norm(e.MEZCLA); if (m) mezclasRuta.add(m); }
+    const refEnrutada = (ref) => {
+      const mz = refMezcla.get(norm(ref));
+      return !!mz && mezclasRuta.has(mz);
+    };
+
+    const demQ = new Map(), demR = new Map(), capHE = new Map(), capHT = new Map();
+    let firstK = null, lastK = null;
+    for (const d of demanda) {
+      const k = monthKey(d.MES);
+      if (!/^\d{4}-\d{2}$/.test(k)) continue;
+      const q = Number(d.CANTIDAD) || 0;
+      demQ.set(k, (demQ.get(k) || 0) + q);
+      if (refEnrutada(d.REFERENCIA)) demR.set(k, (demR.get(k) || 0) + q);
+      if (firstK === null || k < firstK) firstK = k;
+      if (lastK === null || k > lastK) lastK = k;
+    }
+    if (!firstK) return null;
+    for (const c of (calendario || [])) {
+      const k = monthKey(c.MES);
+      if (!/^\d{4}-\d{2}$/.test(k)) continue;
+      capHE.set(k, (capHE.get(k) || 0) + (Number(c.HORAS_EFICIENTES) || 0));
+      capHT.set(k, (capHT.get(k) || 0) + (Number(c.HORAS_TOTALES)    || 0));
+    }
+    const months = buildMonths(firstK, lastK);
+    const sum = (map) => months.reduce((a, k) => a + (map.get(k) || 0), 0);
+    const tot = { demQ: sum(demQ), demR: sum(demR), capHE: sum(capHE), capHT: sum(capHT) };
+    return { months, demQ, demR, capHE, capHT, tot };
+  }, [demanda, calendario, producto, enrutamiento]);
+
+  const fmtInt = (n) => Math.round(n).toLocaleString("es-ES");
+  const fmtTN  = (kg) => (kg / 1000).toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmtPct = (num, den) => den > 0 ? `${(num / den * 100).toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : "—";
+
+  if (!data) {
+    return (
+      <div className="card card-compact" style={{ marginTop: 16 }}>
+        <div className="card-header"><span className="card-title">COBERTURA MENSUAL · DEMANDA vs CAPACIDAD</span></div>
+        <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+          Carga el maestro DEMANDA para ver el resumen mensual.
+        </div>
+      </div>
+    );
+  }
+
+  const { months, demQ, demR, capHE, capHT, tot } = data;
+
+  const labelTd = { position: "sticky", left: 0, zIndex: 1, background: "var(--bg-surface)", padding: "7px 12px", fontWeight: 700, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", whiteSpace: "nowrap" };
+  const numTd   = { textAlign: "right", padding: "7px 8px", borderLeft: "1px solid var(--border)", borderTop: "1px solid var(--border)", color: "var(--text-primary)" };
+  const totTd   = { textAlign: "right", padding: "7px 10px", borderLeft: "2px solid var(--border)", borderTop: "1px solid var(--border)", background: "var(--bg-surface-2)", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap" };
+
+  const statusCell = (estado, key, extra = {}) => {
+    let bg = "var(--bg-surface-2)", color = "var(--text-muted)", sym = "·";
+    if (estado === "ok")  { bg = "rgba(16,185,129,0.18)"; color = "var(--success)"; sym = "✓"; }
+    if (estado === "bad") { bg = "rgba(239,68,68,0.16)";  color = "var(--error)";   sym = "✕"; }
+    return (
+      <td key={key} style={{ textAlign: "center", padding: "7px 4px", background: bg, color, fontWeight: 700, borderLeft: "1px solid var(--border)", borderTop: "1px solid var(--border)", ...extra }}>
+        {sym}
+      </td>
+    );
+  };
+
+  const todoCubierto = months.every((k) => (capHE.get(k) || 0) > 0 || !((demQ.get(k) || 0) > 0));
+
+  return (
+    <div className="card card-compact" style={{ marginTop: 16 }}>
+      <div className="card-header">
+        <span className="card-title">COBERTURA MENSUAL · DEMANDA vs CAPACIDAD</span>
+        <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+          {months.length} {months.length === 1 ? "mes" : "meses"}
+        </span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontFamily: "var(--font-mono)", fontSize: 11, minWidth: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ position: "sticky", left: 0, zIndex: 2, background: "var(--bg-surface-2)", textAlign: "left", padding: "6px 12px", minWidth: 130, borderBottom: "1px solid var(--border)" }} />
+              {months.map((k) => {
+                const [y, m] = k.split("-").map(Number);
+                return (
+                  <th key={k} style={{ padding: "5px 6px", textAlign: "center", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", minWidth: 46, color: "var(--text-secondary)" }}>
+                    <div style={{ fontWeight: 700 }}>{MESES_ABBR[m - 1]}</div>
+                    <div style={{ fontSize: 9, color: "var(--text-muted)" }}>'{String(y).slice(2)}</div>
+                  </th>
+                );
+              })}
+              <th style={{ padding: "5px 10px", textAlign: "center", borderBottom: "1px solid var(--border)", borderLeft: "2px solid var(--border)", minWidth: 70, color: "var(--text-secondary)", background: "var(--bg-surface-2)" }}>
+                <div style={{ fontWeight: 700 }}>TOTAL</div>
+                <div style={{ fontSize: 9, color: "var(--text-muted)" }}>periodo</div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={labelTd}>DEMANDA</td>
+              {months.map((k) => statusCell((demQ.get(k) || 0) > 0 ? "ok" : "neutral", k))}
+              {statusCell("ok", "tot", { borderLeft: "2px solid var(--border)" })}
+            </tr>
+            <tr>
+              <td style={labelTd}>CALENDARIO</td>
+              {months.map((k) => {
+                const hasDem = (demQ.get(k) || 0) > 0;
+                const hasCap = (capHE.get(k) || 0) > 0;
+                return statusCell(hasCap ? "ok" : (hasDem ? "bad" : "neutral"), k);
+              })}
+              {statusCell(todoCubierto ? "ok" : "bad", "tot", { borderLeft: "2px solid var(--border)" })}
+            </tr>
+            <tr>
+              <td style={labelTd}>DEMANDA Q (TN)</td>
+              {months.map((k) => <td key={k} style={numTd}>{fmtTN(demQ.get(k) || 0)}</td>)}
+              <td style={totTd}>{fmtTN(tot.demQ)}</td>
+            </tr>
+            <tr>
+              <td style={labelTd}>DEMANDA ENRUTADA (TN)</td>
+              {months.map((k) => <td key={k} style={numTd}>{fmtTN(demR.get(k) || 0)}</td>)}
+              <td style={totTd}>{fmtTN(tot.demR)}</td>
+            </tr>
+            <tr>
+              <td style={labelTd}>% ENRUTADA</td>
+              {months.map((k) => <td key={k} style={{ ...numTd, color: "var(--text-secondary)" }}>{fmtPct(demR.get(k) || 0, demQ.get(k) || 0)}</td>)}
+              <td style={totTd}>{fmtPct(tot.demR, tot.demQ)}</td>
+            </tr>
+            <tr>
+              <td style={labelTd}>CAPACIDAD HE</td>
+              {months.map((k) => {
+                const v = capHE.get(k) || 0;
+                return <td key={k} style={{ ...numTd, color: v > 0 ? "var(--text-primary)" : "var(--error)" }}>{fmtInt(v)}</td>;
+              })}
+              <td style={totTd}>{fmtInt(tot.capHE)}</td>
+            </tr>
+            <tr>
+              <td style={labelTd}>EFICIENCIA %</td>
+              {months.map((k) => <td key={k} style={{ ...numTd, color: "var(--text-secondary)" }}>{fmtPct(capHE.get(k) || 0, capHT.get(k) || 0)}</td>)}
+              <td style={totTd}>{fmtPct(tot.capHE, tot.capHT)}</td>
+            </tr>
+            <tr>
+              <td style={labelTd}>CAPACIDAD HT</td>
+              {months.map((k) => {
+                const v = capHT.get(k) || 0;
+                return <td key={k} style={{ ...numTd, color: v > 0 ? "var(--text-primary)" : "var(--error)" }}>{fmtInt(v)}</td>;
+              })}
+              <td style={totTd}>{fmtInt(tot.capHT)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Sustituto del resumen mensual mientras no se hayan ejecutado las 4
+// verificaciones: cuenta regresiva + checklist explicando qué falta.
+function CoberturaBloqueada({ verifs }) {
+  const total  = verifs.length;
+  const hechas = verifs.filter((v) => v.result !== null).length;
+  const faltan = total - hechas;
+
+  return (
+    <div className="card card-compact" style={{ marginTop: 16 }}>
+      <div className="card-header">
+        <span className="card-title">COBERTURA MENSUAL · DEMANDA vs CAPACIDAD</span>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+          🔒 BLOQUEADO
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ textAlign: "center", minWidth: 96 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 32, fontWeight: 700, color: faltan === 0 ? "var(--success)" : "var(--warning)", lineHeight: 1 }}>
+            {faltan}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4, lineHeight: 1.3 }}>
+            {faltan === 1 ? "verificación" : "verificaciones"}<br />por ejecutar
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, margin: "0 0 10px" }}>
+            El resumen de cobertura mensual se muestra cuando hayas ejecutado las <strong>{total} verificaciones</strong> (V1–V4).
+            Así garantizamos que los datos están depurados antes de leer demanda frente a capacidad.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {verifs.map((v) => {
+              const done      = v.result !== null;
+              const faltanM   = v.req.filter(([, l]) => !l).map(([n]) => n);
+              const bloqueada = !done && faltanM.length > 0;
+              const icon  = done ? "✓" : (bloqueada ? "⚠" : "○");
+              const color = done ? "var(--success)" : (bloqueada ? "var(--warning)" : "var(--text-muted)");
+              return (
+                <div key={v.id} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 11, fontFamily: "var(--font-mono)" }}>
+                  <span style={{ color, fontWeight: 700, width: 14 }}>{icon}</span>
+                  <span style={{ color: done ? "var(--text-muted)" : "var(--text-secondary)", textDecoration: done ? "line-through" : "none" }}>
+                    {v.id} · {v.label}
+                  </span>
+                  {bloqueada
+                    ? <span style={{ color: "var(--warning)", fontSize: 10 }}>— falta cargar: {faltanM.join(", ")}</span>
+                    : (!done && <span style={{ color: "var(--text-muted)", fontSize: 10 }}>— pendiente, pulsa “Verificar”</span>)}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VerificacionesPage() {
   const toast = useToast();
 
@@ -131,6 +370,7 @@ export default function VerificacionesPage() {
   const producto     = useStore((s) => s.masters.PRODUCTO?.records             ?? []);
   const enrutamiento = useStore((s) => s.masters.ENRUTAMIENTO_MEZCLAS?.records ?? []);
   const mezclas      = useStore((s) => s.masters.MEZCLAS?.records              ?? []);
+  const calendario   = useStore((s) => s.masters.CALENDARIO?.records           ?? []);
   const verificaciones  = useStore((s) => s.verificaciones);
   const setVerificacion = useStore((s) => s.setVerificacion);
 
@@ -145,6 +385,15 @@ export default function VerificacionesPage() {
   const v2 = verificaciones.REFS_SIN_MEZCLA;
   const v3 = verificaciones.REFS_SIN_ENRUTAMIENTO;
   const v4 = verificaciones.MEZCLAS_SIN_FICHA;
+
+  // Gate del resumen mensual: debe ejecutarse TODA la verificación (V1–V4).
+  const verifsResumen = [
+    { id: "V1", label: "Referencias en Demanda sin Producto", result: v1, req: [["DEMANDA", demandaLoaded], ["PRODUCTO", productoLoaded]] },
+    { id: "V2", label: "Demanda sin mezcla en Producto",      result: v2, req: [["DEMANDA", demandaLoaded], ["PRODUCTO", productoLoaded]] },
+    { id: "V3", label: "Demanda sin asignación MO>EX",        result: v3, req: [["DEMANDA", demandaLoaded], ["PRODUCTO", productoLoaded], ["ENRUTAMIENTO MEZCLAS", enrutLoaded]] },
+    { id: "V4", label: "Mezclas sin ficha en MEZCLAS",        result: v4, req: [["DEMANDA", demandaLoaded], ["PRODUCTO", productoLoaded], ["MEZCLAS", mezclasLoaded]] },
+  ];
+  const resumenDesbloqueado = verifsResumen.every((v) => v.result !== null);
 
   function calcV1() {
     const r = verificarRefsDemandaNoEnProducto(demanda, producto);
@@ -191,7 +440,7 @@ export default function VerificacionesPage() {
       <div className="page-header">
         <h1 className="page-title">VERIFICACIONES</h1>
         <p className="page-subtitle">
-          Cruces entre maestros para detectar inconsistencias antes de ejecutar el cálculo. Resuelve en orden: V1 → V2 → V3.
+          Cruces entre maestros para detectar inconsistencias antes de ejecutar el cálculo. Resuelve en orden V1 → V2 → V3 → V4; al ejecutar las 4 se desbloquea el resumen de cobertura mensual.
         </p>
       </div>
 
@@ -247,6 +496,10 @@ export default function VerificacionesPage() {
             onVisualizar={() => setViewing("V4")}
           />
         </div>
+
+        {resumenDesbloqueado
+          ? <CoberturaMensual demanda={demanda} calendario={calendario} producto={producto} enrutamiento={enrutamiento} />
+          : <CoberturaBloqueada verifs={verifsResumen} />}
       </div>
 
       {viewing && (

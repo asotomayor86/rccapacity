@@ -239,6 +239,10 @@ body {
   letter-spacing: 0.06em;
 }
 
+/* Variante comprimida (Maestros / Verificaciones) */
+.card-compact { padding: 11px 14px; }
+.card-compact .card-header { margin-bottom: 9px; }
+
 /* ── Buttons ───────────────────────────────────── */
 
 .btn {

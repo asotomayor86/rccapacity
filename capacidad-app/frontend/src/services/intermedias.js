@@ -16,6 +16,7 @@ const CONFIGURABLE_CAMPOS = [
   "ABREFACIL_LATERAL",
   "ABREFACIL_CENTRAL",
   "TRATADA_PC",
+  "LAMINA",
 ];
 
 const BOOL_TRUTHY = new Set(["si", "sí", "yes", "1", "true"]);

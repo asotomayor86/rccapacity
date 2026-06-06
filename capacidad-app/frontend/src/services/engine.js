@@ -8,7 +8,7 @@ const MEZCLAS_TYPE_MAP = Object.fromEntries((MASTER_SCHEMAS_META.MEZCLAS ?? []).
 const ENR_FIXED_TYPES = {
   REFERENCIA_COMPLEJA: "string", MEZCLA: "string", EXTRUSORA: "string",
   SOLDADOR_LONGITUDINAL: "boolean", ABIERTA_LATERAL: "boolean", ABIERTA_CENTRO: "boolean",
-  ABREFACIL_LATERAL: "boolean", ABREFACIL_CENTRAL: "boolean", TRATADA_PC: "boolean",
+  ABREFACIL_LATERAL: "boolean", ABREFACIL_CENTRAL: "boolean", TRATADA_PC: "boolean", LAMINA: "boolean",
   ES_ACTUAL: "boolean", RS_CALCULADA: "decimal", RENDIMIENTO_CALCULADO: "decimal",
 };
 
@@ -380,6 +380,7 @@ export function calcularEnrutamientos({ productoComplejo, producto, enrutamiento
           ABREFACIL_LATERAL:       pc.ABREFACIL_LATERAL       ?? null,
           ABREFACIL_CENTRAL:       pc.ABREFACIL_CENTRAL       ?? null,
           TRATADA_PC:              pc.TRATADA_PC              ?? null,
+          LAMINA:                  pc.LAMINA                  ?? null,
         };
         for (const c of camposPC) row[c] = pc[c] ?? null;
         row.ES_ACTUAL = se.ES_ACTUAL ?? null;

@@ -13,6 +13,7 @@ const CONFIGURABLE_CAMPOS = [
   { name: "ABREFACIL_LATERAL",     type: "boolean", label: "ABREFÁCIL LATERAL"     },
   { name: "ABREFACIL_CENTRAL",     type: "boolean", label: "ABREFÁCIL CENTRAL"     },
   { name: "TRATADA_PC",             type: "boolean", label: "TRATADA PC"            },
+  { name: "LAMINA",                type: "boolean", label: "LAMINA"               },
 ];
 
 const PRODUCTO_CAMPOS = [

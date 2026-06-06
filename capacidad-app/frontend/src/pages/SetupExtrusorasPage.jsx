@@ -321,6 +321,7 @@ const TABLE_NUM_COLS = [
   { key: "VMAX_KG_H",   label: "Vmax kg/h",   dec: 1 },
   { key: "VMAX_M_MIN",  label: "Vmax m/min",  dec: 1 },
   { key: "ANCHO_MAXIMO",label: "Ancho máx.",  dec: 0 },
+  { key: "CTE_DADO",    label: "Cte. dado",   dec: 2 },
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useStore from "../state";
 import MasterViewer from "../components/MasterViewer";
@@ -44,6 +44,70 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleString("es-ES", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
+}
+
+// Lista de campos en pills. Si su altura natural supera 2 líneas, colapsa a una
+// sola línea con un desplegable; si cabe en ≤2 líneas, se muestra entera.
+function CamposPills({ campos, loaded, masterKey, onPillEnter, onPillLeave }) {
+  const ref = useRef(null);
+  const [expanded, setExpanded]       = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const [lineH, setLineH]             = useState(0);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const first = el.firstElementChild;
+      const ph = first ? first.offsetHeight : 20;
+      setLineH(ph);
+      // scrollHeight = altura total del contenido (ignora el recorte por maxHeight).
+      // Supera 2 líneas → necesita desplegable.
+      setOverflowing(el.scrollHeight > ph * 2 + 6);
+    };
+    measure();
+    let ro;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    }
+    return () => ro && ro.disconnect();
+  }, [campos]);
+
+  const collapsed = overflowing && !expanded;
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div
+        ref={ref}
+        style={{
+          display: "flex", flexWrap: "wrap", gap: 5,
+          maxHeight: collapsed && lineH ? lineH : undefined,
+          overflow: collapsed ? "hidden" : undefined,
+        }}
+      >
+        {campos.map((f) => (
+          <span
+            key={f}
+            style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: loaded ? "default" : undefined, whiteSpace: "nowrap" }}
+            onMouseEnter={loaded ? (e) => onPillEnter(e, masterKey, f) : undefined}
+            onMouseLeave={loaded ? onPillLeave : undefined}
+          >
+            {f}
+          </span>
+        ))}
+      </div>
+      {overflowing && (
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ fontSize: 10, padding: "2px 6px", marginTop: 5, color: "var(--accent)" }}
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {expanded ? "▴ Ver menos" : `▾ Ver todos (${campos.length})`}
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function MaestrosPage() {
@@ -136,7 +200,7 @@ export default function MaestrosPage() {
             const s = status[key] || {};
             const loaded = s.loaded;
             return (
-              <div key={key} className="card" style={{ borderColor: loaded ? "var(--card-success-border)" : "var(--border)", background: loaded ? "var(--card-success-bg)" : "var(--bg-surface)" }}>
+              <div key={key} className="card card-compact" style={{ borderColor: loaded ? "var(--card-success-border)" : "var(--border)", background: loaded ? "var(--card-success-bg)" : "var(--bg-surface)" }}>
                 <div className="card-header">
                   <div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: loaded ? "var(--text-primary)" : "var(--text-muted)", letterSpacing: "0.06em", marginBottom: 2 }}>
@@ -149,21 +213,10 @@ export default function MaestrosPage() {
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 14 }}>
-                  {info.fields.map((f) => (
-                    <span
-                      key={f}
-                      style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: loaded ? "default" : undefined }}
-                      onMouseEnter={loaded ? (e) => handlePillEnter(e, key, f) : undefined}
-                      onMouseLeave={loaded ? handlePillLeave : undefined}
-                    >
-                      {f}
-                    </span>
-                  ))}
-                </div>
+                <CamposPills campos={info.fields} loaded={loaded} masterKey={key} onPillEnter={handlePillEnter} onPillLeave={handlePillLeave} />
 
                 {loaded && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 14, padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 8, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
                     <span>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--accent)", marginRight: 6 }}>
                         {s.count?.toLocaleString("es-ES")}
@@ -198,8 +251,9 @@ export default function MaestrosPage() {
           {(() => {
             const loaded = status.SETUP_EXTRUSORAS?.loaded;
             const s = status.SETUP_EXTRUSORAS || {};
+            const setupCampos = (MASTER_SCHEMAS_META.SETUP_EXTRUSORAS ?? []).map((f) => f.label ?? f.name);
             return (
-              <div className="card" style={{ borderColor: loaded ? "var(--card-success-border)" : "var(--border)", background: loaded ? "var(--card-success-bg)" : "var(--bg-surface)" }}>
+              <div className="card card-compact" style={{ borderColor: loaded ? "var(--card-success-border)" : "var(--border)", background: loaded ? "var(--card-success-bg)" : "var(--bg-surface)" }}>
                 <div className="card-header">
                   <div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: loaded ? "var(--text-primary)" : "var(--text-muted)", letterSpacing: "0.06em", marginBottom: 2 }}>
@@ -219,8 +273,10 @@ export default function MaestrosPage() {
                   </span>
                 </div>
 
+                <CamposPills campos={setupCampos} loaded={loaded} masterKey="SETUP_EXTRUSORAS" onPillEnter={handlePillEnter} onPillLeave={handlePillLeave} />
+
                 {loaded && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 14, padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 8, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
                     <span>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--accent)", marginRight: 6 }}>
                         {s.count?.toLocaleString("es-ES")}

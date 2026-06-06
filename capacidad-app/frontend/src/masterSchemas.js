@@ -52,6 +52,7 @@ export const MASTER_SCHEMAS_META = {
     { name: "ABREFACIL_LATERAL",     type: "boolean", label: "ABREFÁCIL LATERAL"       },
     { name: "ABREFACIL_CENTRAL",     type: "boolean", label: "ABREFÁCIL CENTRAL"       },
     { name: "TRATADA_PC",             type: "boolean", label: "TRATADA PC"              },
+    { name: "LAMINA",                type: "boolean", label: "LAMINA"                  },
   ],
 
   SETUP_EXTRUSORAS: [

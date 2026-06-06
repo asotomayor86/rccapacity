@@ -8,6 +8,9 @@ const DETECTION_KEYWORDS = [
   { type: "REGLAS_FACTIBLES",     keyword: "reglas_factibilidad"      },
   { type: "REGLAS",               keyword: "reglas_producto_complejo" },
   { type: "ENRUTAMIENTO_MEZCLAS", keyword: "enrutamiento"  },
+  // "mezclas" va DESPUÉS de "enrutamiento": los ficheros enrutamiento_mezclas_*
+  // contienen ambas palabras y deben detectarse como ENRUTAMIENTO_MEZCLAS.
+  { type: "MEZCLAS",              keyword: "mezclas"       },
   { type: "DEMANDA",              keyword: "demanda"       },
   { type: "PRODUCTO",             keyword: "producto"      },
   { type: "CALENDARIO",           keyword: "calendario"    },
@@ -17,7 +20,7 @@ const DETECTION_KEYWORDS = [
 
 // Orden canónico para mostrar en la tabla resumen
 export const ALL_TYPES = [
-  "DEMANDA", "PRODUCTO", "CALENDARIO", "ENRUTAMIENTO_MEZCLAS",
+  "DEMANDA", "PRODUCTO", "CALENDARIO", "ENRUTAMIENTO_MEZCLAS", "MEZCLAS",
   "SETUP_EXTRUSORAS", "REGLAS", "REGLAS_FACTIBLES", "CALCULOS",
 ];
 export const TYPE_LABELS = {
@@ -25,6 +28,7 @@ export const TYPE_LABELS = {
   PRODUCTO:             "Producto",
   CALENDARIO:           "Calendario",
   ENRUTAMIENTO_MEZCLAS: "Enrutamiento Mezclas",
+  MEZCLAS:              "Mezclas",
   SETUP_EXTRUSORAS:     "Setup Extrusoras",
   REGLAS:               "Reglas",
   REGLAS_FACTIBLES:     "Reglas Factibilidad",

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import useStore from "../state";
 import { exportCalculos } from "../services/exporter";
 import { autoImportCalculos } from "../services/csvParser";
+import { evaluarArbol } from "../services/engine";
 import { useToast } from "../components/Toast";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -11,7 +12,7 @@ const PRODUCTO_COMPLEJO_FIELDS = [
   "TIPO_PRODUCTO", "ABREFACIL", "TRATADA",
   "ANCHO_EXTRUSION", "GALGA",
   "SOLDADOR_LONGITUDINAL", "ABIERTA_LATERAL", "ABIERTA_CENTRO",
-  "ABREFACIL_LATERAL", "ABREFACIL_CENTRAL", "TRATADA_PC",
+  "ABREFACIL_LATERAL", "ABREFACIL_CENTRAL", "TRATADA_PC", "LAMINA",
 ];
 
 const SETUP_FIELDS = [
@@ -517,6 +518,141 @@ function ConstructorPanel({ defInicial, isNew, definiciones, onSave, onDelete })
   );
 }
 
+// ── Verificador visual: valores calculados por extrusora ──────────────────────
+
+const VC_TH = { textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--border)", color: "var(--text-secondary)", fontWeight: 700, whiteSpace: "nowrap", background: "var(--bg-surface-2)" };
+const VC_TD = { padding: "6px 10px", borderTop: "1px solid var(--border)", color: "var(--text-secondary)", whiteSpace: "nowrap" };
+
+function fmtCalc(v) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "SÍ" : "NO";
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) return "—";
+    return Number.isInteger(v) ? v.toLocaleString("es-ES") : v.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+  }
+  return String(v);
+}
+
+// Aplica la misma regla de factibilidad: usa ENRUTAMIENTOS_FACTIBLES (FACTIBLE=SI)
+// y reevalúa cada definición contra la fila para mostrar TODOS los cálculos.
+function VerificadorCalculos({ definiciones, rows, rowsFactibles }) {
+  const [ref, setRef] = useState("");
+
+  const calculosByNombre = useMemo(
+    () => new Map((definiciones ?? []).filter((d) => d.nombre).map((d) => [d.nombre, d])),
+    [definiciones]
+  );
+  const defsOrdenadas = useMemo(() => {
+    const rank = (n) => (n === "RS" ? 0 : n === "RENDIMIENTO" ? 1 : 2);
+    return [...(definiciones ?? [])].sort((a, b) => rank(a.nombre) - rank(b.nombre) || String(a.nombre).localeCompare(String(b.nombre)));
+  }, [definiciones]);
+
+  const refs = useMemo(() => {
+    const s = new Set();
+    for (const r of (rowsFactibles ?? [])) {
+      const rc = r.REFERENCIA_COMPLEJA;
+      if (rc) s.add(String(rc).slice(0, -1));
+    }
+    return [...s].sort();
+  }, [rowsFactibles]);
+
+  const filas = useMemo(() => {
+    if (!ref) return [];
+    return (rowsFactibles ?? []).filter(
+      (r) => r.FACTIBLE === "SI" && String(r.REFERENCIA_COMPLEJA ?? "").slice(0, -1) === ref
+    );
+  }, [rowsFactibles, ref]);
+
+  // Gate: necesita ENRUTAMIENTOS FACTIBLES calculado (mismo patrón que cobertura).
+  if (!rowsFactibles || rowsFactibles.length === 0) {
+    const pasos = [
+      { label: "Calcular ENRUTAMIENTOS",           done: (rows ?? []).length > 0 },
+      { label: "Calcular ENRUTAMIENTOS FACTIBLES", done: false },
+    ];
+    return (
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">VERIFICADOR · VALORES POR EXTRUSORA</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "var(--bg-surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>🔒 BLOQUEADO</span>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, margin: "0 0 10px" }}>
+          Muestra, para una referencia, el valor de tus cálculos en cada extrusora <strong>factible</strong>.
+          Requiere la tabla <strong>ENRUTAMIENTOS FACTIBLES</strong> calculada (aplica la regla de factibilidad). En <strong>Intermedias Calculadas</strong>, ejecuta:
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {pasos.map((p) => (
+            <div key={p.label} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 11, fontFamily: "var(--font-mono)" }}>
+              <span style={{ color: p.done ? "var(--success)" : "var(--text-muted)", fontWeight: 700, width: 14 }}>{p.done ? "✓" : "○"}</span>
+              <span style={{ color: p.done ? "var(--text-muted)" : "var(--text-secondary)", textDecoration: p.done ? "line-through" : "none" }}>{p.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <span className="card-title">VERIFICADOR · VALORES POR EXTRUSORA</span>
+        {ref && <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{filas.length} extrusora{filas.length === 1 ? "" : "s"} factible{filas.length === 1 ? "" : "s"}</span>}
+      </div>
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>Referencia</span>
+        <select className="form-control" style={{ fontFamily: "var(--font-mono)", fontSize: 12, minWidth: 220 }} value={ref} onChange={(e) => setRef(e.target.value)}>
+          <option value="">-- selecciona una referencia --</option>
+          {refs.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </div>
+
+      {!ref ? (
+        <div style={{ padding: "20px 0", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+          Selecciona una referencia para ver sus valores calculados por extrusora.
+        </div>
+      ) : filas.length === 0 ? (
+        <div style={{ padding: "20px 0", textAlign: "center", color: "var(--warning)", fontSize: 13 }}>
+          La referencia <code>{ref}</code> no tiene extrusoras factibles (todas excluidas por la regla de factibilidad).
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", fontFamily: "var(--font-mono)", fontSize: 11, minWidth: "100%" }}>
+            <thead>
+              <tr>
+                <th style={VC_TH}>VARIANTE</th>
+                <th style={VC_TH}>EXTRUSORA</th>
+                <th style={VC_TH}>MEZCLA</th>
+                {defsOrdenadas.map((d) => (
+                  <th key={d.id} style={{ ...VC_TH, textAlign: "right", color: "var(--accent)", borderLeft: "2px solid var(--border)" }}>
+                    {d.nombre}{d.unidad ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> ({d.unidad})</span> : null}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((row, i) => {
+                const ctx = { calculosByNombre, cache: new Map() };
+                const variante = String(row.REFERENCIA_COMPLEJA ?? "").slice(-1) === "S" ? "Simple" : "Doble";
+                return (
+                  <tr key={i}>
+                    <td style={VC_TD}>{variante}</td>
+                    <td style={{ ...VC_TD, fontWeight: 700, color: "var(--text-primary)" }}>{row.EXTRUSORA}</td>
+                    <td style={VC_TD}>{row.MEZCLA}</td>
+                    {defsOrdenadas.map((d) => {
+                      const v = evaluarArbol(d.arbol, row, ctx);
+                      return <td key={d.id} style={{ ...VC_TD, textAlign: "right", borderLeft: "2px solid var(--border)", color: v == null ? "var(--error)" : "var(--text-primary)" }}>{fmtCalc(v)}</td>;
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CalculosPage() {
@@ -525,6 +661,8 @@ export default function CalculosPage() {
   const addCalculo    = useStore((s) => s.addCalculo);
   const updateCalculo = useStore((s) => s.updateCalculo);
   const deleteCalculo = useStore((s) => s.deleteCalculo);
+  const enrutamientos          = useStore((s) => s.intermedias_calculadas.ENRUTAMIENTOS);
+  const enrutamientosFactibles = useStore((s) => s.intermedias_calculadas.ENRUTAMIENTOS_FACTIBLES);
 
   const [selectedId, setSelectedId] = useState(null);
   const [isNew,      setIsNew]      = useState(false);
@@ -653,6 +791,14 @@ export default function CalculosPage() {
             />
           )}
         </div>
+      </div>
+
+      <div className="page-body" style={{ paddingTop: 0 }}>
+        <VerificadorCalculos
+          definiciones={definiciones}
+          rows={enrutamientos}
+          rowsFactibles={enrutamientosFactibles}
+        />
       </div>
     </>
   );

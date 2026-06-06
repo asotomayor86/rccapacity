@@ -18,6 +18,7 @@ export const FIXED_PC_BOOL = [
   { name: "ABREFACIL_LATERAL",     label: "ABREFÁCIL LATERAL"     },
   { name: "ABREFACIL_CENTRAL",     label: "ABREFÁCIL CENTRAL"     },
   { name: "TRATADA_PC",            label: "TRATADA PC"            },
+  { name: "LAMINA",                label: "LAMINA"                },
 ];
 export const FIXED_PC_NAMES = new Set(FIXED_PC_BOOL.map((f) => f.name));
 
